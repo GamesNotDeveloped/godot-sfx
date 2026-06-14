@@ -1,0 +1,94 @@
+[gd_scene format=3 uid="uid://dhvn6w1l0gp5"]
+
+[ext_resource type="Script" uid="uid://bmngdi1qb2d0e" path="res://addons/gnd_sfx/ui/event_viewer.gd" id="1_script"]
+[ext_resource type="Theme" path="res://addons/gnd_sfx/ui/event_viewer_theme.tres" id="2_theme"]
+
+[node name="EventViewer" type="Window" unique_id=15959154]
+oversampling_override = 1.0
+title = "Event Viewer"
+initial_position = 2
+size = Vector2i(1080, 720)
+theme = ExtResource("2_theme")
+script = ExtResource("1_script")
+
+[node name="Root" type="MarginContainer" parent="." unique_id=1728709127]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="VBox" type="VBoxContainer" parent="Root" unique_id=27455611]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TopBar" type="HBoxContainer" parent="Root/VBox" unique_id=1239563661]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WindowTitleLabel" type="Label" parent="Root/VBox/TopBar" unique_id=1776289809]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Event Viewer"
+
+[node name="TransportPanel" type="PanelContainer" parent="Root/VBox/TopBar" unique_id=512934790]
+layout_mode = 2
+theme_type_variation = &"EVPanel"
+
+[node name="TransportBox" type="HBoxContainer" parent="Root/VBox/TopBar/TransportPanel" unique_id=512934791]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="PlayButton" type="Button" parent="Root/VBox/TopBar/TransportPanel/TransportBox" unique_id=486019921]
+layout_mode = 2
+text = "Play"
+
+[node name="StopButton" type="Button" parent="Root/VBox/TopBar/TransportPanel/TransportBox" unique_id=484782941]
+layout_mode = 2
+text = "Stop"
+
+[node name="StopImmediateButton" type="Button" parent="Root/VBox/TopBar/TransportPanel/TransportBox" unique_id=621695187]
+layout_mode = 2
+text = "Force Stop"
+
+[node name="CurrentTimeLabel" type="Label" parent="Root/VBox/TopBar" unique_id=299032588]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "00:00:000"
+horizontal_alignment = 1
+
+[node name="FollowCursorToggle" type="CheckButton" parent="Root/VBox/TopBar" unique_id=330124873]
+layout_mode = 2
+button_pressed = true
+text = "Follow cursor"
+
+[node name="ParamsScroll" type="ScrollContainer" parent="Root/VBox" unique_id=1753483877]
+custom_minimum_size = Vector2(0, 118)
+layout_mode = 2
+vertical_scroll_mode = 0
+
+[node name="ParamsContainer" type="HFlowContainer" parent="Root/VBox/ParamsScroll" unique_id=1449368060]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+
+[node name="NoParamsLabel" type="Label" parent="Root/VBox/ParamsScroll/ParamsContainer" unique_id=1446438774]
+visible = false
+modulate = Color(0.72, 0.77, 0.83, 1)
+layout_mode = 2
+text = "No automations"
+
+[node name="EmptyTabsLabel" type="Label" parent="Root/VBox" unique_id=2003174450]
+visible = false
+layout_mode = 2
+text = "No event selected"
+horizontal_alignment = 1
+
+[node name="Tabs" type="TabContainer" parent="Root/VBox" unique_id=1461968121]
+layout_mode = 2
+size_flags_vertical = 3

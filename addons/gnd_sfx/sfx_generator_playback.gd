@@ -3,7 +3,7 @@ extends Resource
 class_name SfxGeneratorPlayback
 
 
-func create_state(playback: AudioStreamGeneratorPlayback, track):
+func create_state(playback: AudioStreamGeneratorPlayback, clip):
     return null
 
 

@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://tsfy2adx0c7l"]
+
+[ext_resource type="Script" uid="uid://dbkt5ej5j5spe" path="res://addons/gnd_sfx/bank_explorer.gd" id="1_controller"]
+[ext_resource type="PackedScene" uid="uid://ddk8lcyh84kj7" path="res://addons/gnd_sfx/ui/bank_viewer.tscn" id="2_bank_viewer"]
+[ext_resource type="Script" uid="uid://lj2sjiebi4m0" path="res://addons/gnd_sfx/sfx_player.gd" id="4_player"]
+
+[node name="BankExplorer" type="Control" unique_id=509489170]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_controller")
+
+[node name="Background" type="ColorRect" parent="." unique_id=473974060]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.1, 0.13, 1)
+metadata/_edit_use_anchors_ = true
+
+[node name="PreviewPlayer" type="Node" parent="." unique_id=1997178851]
+script = ExtResource("4_player")
+max_tracks = 12
+
+[node name="BankViewer" parent="." unique_id=798532657 instance=ExtResource("2_bank_viewer")]
+layout_mode = 1

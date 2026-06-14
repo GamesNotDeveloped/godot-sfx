@@ -1,0 +1,16 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://addons/gnd_sfx/ui/track_lane_header.tscn" id="1_header"]
+[ext_resource type="PackedScene" path="res://addons/gnd_sfx/ui/track_lane_waveform.tscn" id="2_waveform"]
+[ext_resource type="Script" path="res://addons/gnd_sfx/ui/track_lane_view.gd" id="3_script"]
+
+[node name="TrackLaneView" type="HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 0
+script = ExtResource("3_script")
+
+[node name="Header" parent="." instance=ExtResource("1_header")]
+layout_mode = 2
+
+[node name="Waveform" parent="." instance=ExtResource("2_waveform")]
+layout_mode = 2

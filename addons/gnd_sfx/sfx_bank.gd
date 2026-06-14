@@ -3,17 +3,17 @@ extends Resource
 class_name SfxBank
 
 @export var events: Array[SfxEvent] = []:
-    set(x):
-        events = x
+    set(value):
+        events = value
         _rebuild_events_cache()
 
 
-var _events_cache = {}
+var _events_cache: Dictionary = {}
 
-func _rebuild_events_cache():
+func _rebuild_events_cache() -> void:
     _events_cache = {}
     for event in events:
-        if event.name:
+        if event and event.name:
             _events_cache[event.name] = event
 
 func get_event(event_name: StringName) -> SfxEvent:

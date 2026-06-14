@@ -1,0 +1,35 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/gnd_sfx/ui/parameter_editor.gd" id="1_script"]
+
+[node name="ParameterEditor" type="PanelContainer"]
+custom_minimum_size = Vector2(240, 0)
+theme_type_variation = &"EVPanel"
+script = ExtResource("1_script")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TitleLabel" type="Label" parent="Margin/VBox"]
+layout_mode = 2
+text = "Parameter"
+
+[node name="RangeRow" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Slider" type="HSlider" parent="Margin/VBox/RangeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SpinBox" type="SpinBox" parent="Margin/VBox/RangeRow"]
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
