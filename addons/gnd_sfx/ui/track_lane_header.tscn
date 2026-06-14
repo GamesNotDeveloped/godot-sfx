@@ -1,0 +1,91 @@
+[gd_scene format=3 uid="uid://b4bmkmf4k2y7"]
+
+[ext_resource type="Script" uid="uid://vg83bw7w8pvm" path="res://addons/gnd_sfx/ui/track_lane_header.gd" id="1_track_lane_header"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_groove"]
+bg_color = Color(0.13, 0.13, 0.13, 1)
+content_margin_left = 0.0
+content_margin_top = 4.0
+content_margin_right = 0.0
+content_margin_bottom = 4.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_fill"]
+bg_color = Color(0.1843137, 0.4352941, 0.7215686, 0.9)
+content_margin_left = 0.0
+content_margin_top = 4.0
+content_margin_right = 0.0
+content_margin_bottom = 4.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_solo_pressed"]
+bg_color = Color(0.92, 0.82, 0.18, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mute_pressed"]
+bg_color = Color(0.68, 0.26, 0.26, 1)
+
+[node name="TrackLaneHeader" type="VBoxContainer"]
+custom_minimum_size = Vector2(220, 52)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/separation = 3
+script = ExtResource("1_track_lane_header")
+
+[node name="Row1" type="HBoxContainer" parent="."]
+layout_mode = 2
+mouse_filter = 1
+theme_override_constants/separation = 4
+
+[node name="TitleLabel" type="Label" parent="Row1"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"TrackTitle"
+text = "Track title"
+clip_text = true
+
+[node name="SoloButton" type="Button" parent="Row1"]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_pressed_color = Color(0, 0, 0, 1)
+theme_override_colors/font_hover_pressed_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 10
+theme_override_styles/pressed = SubResource("StyleBoxFlat_solo_pressed")
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_solo_pressed")
+toggle_mode = true
+text = "S"
+
+[node name="MuteButton" type="Button" parent="Row1"]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_pressed_color = Color(0, 0, 0, 1)
+theme_override_colors/font_hover_pressed_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 10
+theme_override_styles/pressed = SubResource("StyleBoxFlat_mute_pressed")
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_mute_pressed")
+toggle_mode = true
+text = "M"
+
+[node name="Row2" type="HBoxContainer" parent="."]
+layout_mode = 2
+mouse_filter = 1
+theme_override_constants/separation = 4
+
+[node name="GainSlider" type="HSlider" parent="Row2"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+focus_mode = 0
+theme_override_styles/slider = SubResource("StyleBoxFlat_groove")
+theme_override_styles/grabber_area = SubResource("StyleBoxFlat_fill")
+theme_override_styles/grabber_area_highlight = SubResource("StyleBoxFlat_fill")
+min_value = -60.0
+max_value = 12.0
+step = 0.5
+
+[node name="GainSpinBox" type="SpinBox" parent="Row2"]
+custom_minimum_size = Vector2(68, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+min_value = -60.0
+max_value = 12.0
+step = 0.5
+suffix = "dB"

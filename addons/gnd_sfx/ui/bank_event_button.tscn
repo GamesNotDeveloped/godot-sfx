@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://c0x61jihf3n2v"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_svqy3"]
+content_margin_left = 10.0
+content_margin_right = 10.0
+bg_color = Color(0.14021811, 0.16418988, 0.17427579, 0.6392157)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_254lh"]
+content_margin_left = 10.0
+content_margin_right = 10.0
+bg_color = Color(0.2412082, 0.1723055, 0.12302289, 0.74509805)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_d21ts"]
+content_margin_left = 10.0
+content_margin_right = 10.0
+bg_color = Color(0.24787188, 0.13915983, 0.056884974, 0.7137255)
+
+[node name="BankEventButton" type="Button" unique_id=626868892]
+custom_minimum_size = Vector2(0, 48)
+theme_override_styles/normal = SubResource("StyleBoxFlat_svqy3")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_254lh")
+theme_override_styles/hover = SubResource("StyleBoxFlat_d21ts")
+text = "Event"
+alignment = 0

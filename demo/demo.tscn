@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://d2cr80qc8bg4w"]
+
+[ext_resource type="PackedScene" uid="uid://tsfy2adx0c7l" path="res://addons/gnd_sfx/bank_explorer.tscn" id="1_5hfv0"]
+[ext_resource type="Resource" uid="uid://nvhenxjim7wx" path="res://sounds/sfx_bank_atmo.tres" id="4_6bw2v"]
+
+[node name="Demo" type="Control" unique_id=816268515]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BankExplorer" parent="." unique_id=509489170 instance=ExtResource("1_5hfv0")]
+layout_mode = 1
+demo_bank = ExtResource("4_6bw2v")

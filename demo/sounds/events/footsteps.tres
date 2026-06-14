@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="SfxEvent" format=3 uid="uid://bhhjddgrltg00"]
+
+[ext_resource type="Script" uid="uid://bgxtc44e5rb0l" path="res://addons/gnd_sfx/sfx_event.gd" id="1_qxivp"]
+[ext_resource type="Script" uid="uid://boicinkvs7i0h" path="res://addons/gnd_sfx/sfx_clip.gd" id="2_6ihku"]
+[ext_resource type="Script" uid="uid://bf434i6ru4ch" path="res://addons/gnd_sfx/sfx_automation.gd" id="3_mn77h"]
+[ext_resource type="AudioStream" uid="uid://dlnxdvo7huuod" path="res://sounds/assets/206030__yuval__footsteps-grass-1.wav" id="4_1if6t"]
+[ext_resource type="AudioStream" uid="uid://dp30db2cbv1ee" path="res://sounds/assets/206030__yuval__footsteps-grass-2.wav" id="5_ag1qg"]
+
+[sub_resource type="Curve" id="Curve_mn77h"]
+_data = [Vector2(0, 0), 0.0, 2.6872034, 0, 0, Vector2(0.09045226, 0.99370754), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="Curve" id="Curve_h1s8t"]
+_limits = [0.0, 1.0, 0.0, 0.2562814]
+_data = [Vector2(0, 1), 0.0, 0.049493138, 0, 0, Vector2(0.2562814, 0), -2.4199753, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="AudioStreamRandomizer" id="AudioStreamRandomizer_1if6t"]
+playback_mode = 2
+streams_count = 2
+stream_0/stream = ExtResource("4_1if6t")
+stream_1/stream = ExtResource("5_ag1qg")
+
+[sub_resource type="Resource" id="Resource_1if6t"]
+script = ExtResource("2_6ihku")
+stream = SubResource("AudioStreamRandomizer_1if6t")
+fade_in_curve = SubResource("Curve_mn77h")
+fade_out_curve = SubResource("Curve_h1s8t")
+metadata/_custom_type_script = "uid://boicinkvs7i0h"
+
+[resource]
+script = ExtResource("1_qxivp")
+clips = Array[ExtResource("2_6ihku")]([SubResource("Resource_1if6t")])
+name = &"footsteps"
+metadata/_custom_type_script = "uid://bgxtc44e5rb0l"

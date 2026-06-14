@@ -1,0 +1,7 @@
+[gd_scene format=3]
+
+[node name="TabContentWrapper" type="MarginContainer"]
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8

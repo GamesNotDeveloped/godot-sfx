@@ -1,0 +1,53 @@
+[gd_scene format=3 uid="uid://ddk8lcyh84kj7"]
+
+[ext_resource type="Script" uid="uid://db1sk4mniqysg" path="res://addons/gnd_sfx/ui/bank_viewer.gd" id="1_script"]
+
+[node name="BankViewer" type="Control" unique_id=1252811514]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Margin" type="MarginContainer" parent="." unique_id=1965062677]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="Margin" unique_id=1603929425]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="Margin/VBox" unique_id=810651458]
+layout_mode = 2
+text = "SFX Bank"
+
+[node name="SummaryLabel" type="Label" parent="Margin/VBox" unique_id=1603131505]
+modulate = Color(0.72, 0.77, 0.83, 1)
+layout_mode = 2
+text = "0 events"
+
+[node name="EmptyLabel" type="Label" parent="Margin/VBox" unique_id=537364783]
+visible = false
+modulate = Color(0.72, 0.77, 0.83, 1)
+layout_mode = 2
+text = "No bank assigned"
+autowrap_mode = 3
+
+[node name="Scroll" type="ScrollContainer" parent="Margin/VBox" unique_id=160796539]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="EventList" type="VBoxContainer" parent="Margin/VBox/Scroll" unique_id=1404772629]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8

@@ -1,0 +1,79 @@
+[gd_resource type="Resource" script_class="SfxBank" format=3 uid="uid://mqce7mtv0y7s"]
+
+[ext_resource type="Script" uid="uid://bbamgfxaoiofj" path="res://addons/gnd_sfx/sfx_bank.gd" id="1_bank"]
+[ext_resource type="Script" uid="uid://bgxtc44e5rb0l" path="res://addons/gnd_sfx/sfx_event.gd" id="2_event"]
+[ext_resource type="Script" uid="uid://boicinkvs7i0h" path="res://addons/gnd_sfx/sfx_clip.gd" id="3_track"]
+[ext_resource type="Script" uid="uid://bf434i6ru4ch" path="res://addons/gnd_sfx/sfx_automation.gd" id="4_automation"]
+[ext_resource type="Script" uid="uid://4tpinwjxy16c" path="res://demo_tone_generator_playback.gd" id="5_tone"]
+
+[sub_resource type="Resource" id="Resource_tone"]
+script = ExtResource("5_tone")
+
+[sub_resource type="AudioStreamGenerator" id="AudioStreamGenerator_rpm_a"]
+buffer_length = 0.12
+
+[sub_resource type="Resource" id="Resource_engine_rpm_low"]
+script = ExtResource("3_track")
+stream = SubResource("AudioStreamGenerator_rpm_a")
+generator_playback = SubResource("Resource_tone")
+length = 350.0
+
+[sub_resource type="AudioStreamGenerator" id="AudioStreamGenerator_rpm_b"]
+buffer_length = 0.12
+
+[sub_resource type="Resource" id="Resource_engine_rpm_high"]
+script = ExtResource("3_track")
+stream = SubResource("AudioStreamGenerator_rpm_b")
+generator_playback = SubResource("Resource_tone")
+offset = 400.0
+length = 600.0
+phase_offset = 0.1
+
+[sub_resource type="Resource" id="Resource_engine_rpm"]
+script = ExtResource("4_automation")
+parameter_name = &"rpm"
+clips = Array[ExtResource("3_track")]([SubResource("Resource_engine_rpm_low"), SubResource("Resource_engine_rpm_high")])
+max_domain = 1000.0
+
+[sub_resource type="AudioStreamGenerator" id="AudioStreamGenerator_intensity"]
+buffer_length = 0.12
+
+[sub_resource type="Resource" id="Resource_engine_intensity"]
+script = ExtResource("3_track")
+stream = SubResource("AudioStreamGenerator_intensity")
+generator_playback = SubResource("Resource_tone")
+length = 1.0
+
+[sub_resource type="Resource" id="Resource_engine_load"]
+script = ExtResource("4_automation")
+parameter_name = &"load"
+clips = Array[ExtResource("3_track")]([SubResource("Resource_engine_intensity")])
+
+[sub_resource type="AudioStreamGenerator" id="AudioStreamGenerator_intro"]
+buffer_length = 0.12
+
+[sub_resource type="Resource" id="Resource_engine_intro"]
+script = ExtResource("3_track")
+stream = SubResource("AudioStreamGenerator_intro")
+generator_playback = SubResource("Resource_tone")
+length = 0.6
+
+[sub_resource type="AudioStreamGenerator" id="AudioStreamGenerator_body"]
+buffer_length = 0.12
+
+[sub_resource type="Resource" id="Resource_engine_body"]
+script = ExtResource("3_track")
+stream = SubResource("AudioStreamGenerator_body")
+generator_playback = SubResource("Resource_tone")
+offset = 0.45
+length = 1.8
+
+[sub_resource type="Resource" id="Resource_engine_event"]
+script = ExtResource("2_event")
+clips = Array[ExtResource("3_track")]([SubResource("Resource_engine_intro"), SubResource("Resource_engine_body")])
+name = &"engine_loop"
+automations = Array[ExtResource("4_automation")]([SubResource("Resource_engine_rpm"), SubResource("Resource_engine_load")])
+
+[resource]
+script = ExtResource("1_bank")
+events = Array[ExtResource("2_event")]([SubResource("Resource_engine_event")])
