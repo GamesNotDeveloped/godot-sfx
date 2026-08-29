@@ -29,3 +29,5 @@ max_tracks = 12
 
 [node name="BankViewer" parent="." unique_id=798532657 instance=ExtResource("2_bank_viewer")]
 layout_mode = 1
+
+[connection signal="event_requested" from="BankViewer" to="." method="_on_event_requested"]

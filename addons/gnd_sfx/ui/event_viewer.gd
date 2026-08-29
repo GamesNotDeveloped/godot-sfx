@@ -36,11 +36,6 @@ var _parameter_snapshot_seeded := false
 
 
 func _ready() -> void:
-    close_requested.connect(queue_free)
-    _play_button.pressed.connect(_on_play_pressed)
-    _stop_button.pressed.connect(_on_stop_pressed)
-    _stop_immediate_button.pressed.connect(_on_stop_immediate_pressed)
-    _follow_cursor_toggle.toggled.connect(_on_follow_cursor_toggled)
     set_process(true)
     _refresh()
 

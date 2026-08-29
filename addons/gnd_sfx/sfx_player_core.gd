@@ -4,9 +4,20 @@ extends RefCounted
 
 ## Shared playback/preview logic for SfxPlayer and SfxPlayer3D. Composed
 ## instead of inherited because the two owners extend different Node types
-## (Node vs Node3D) and GDScript has no multiple inheritance; `_owner` is
-## deliberately untyped so its exported properties (bank, max_tracks, ...)
-## resolve dynamically regardless of which owner script is using this.
+## (Node vs Node3D) and GDScript has no multiple inheritance.
+##
+## `_owner` is deliberately untyped (Variant, not Node) so member access
+## resolves dynamically at runtime. This is not a formal interface -
+## GDScript has none - but the owner is expected to implement:
+##   signal finished
+##   var bank: SfxBank
+##   var max_tracks: int
+##   var playback_enabled: bool
+##   var playback_effect: StringName
+##   var playback_automation: StringName
+##   var playback_automation_value: float
+## plus the Node API (add_child, remove_child, set_process, is_inside_tree,
+## notify_property_list_changed, emit_signal).
 
 const PLAYBACK_NONE_OPTION := "<none>"
 
@@ -29,25 +40,25 @@ func _init(owner, make_player: Callable, configure_player: Callable) -> void:
     _configure_player = configure_player
 
 
-func enter_tree() -> void:
+func initialize() -> void:
     _reset_preview_state()
     if Engine.is_editor_hint():
-        _owner.set("playback_enabled", false)
+        _owner.playback_enabled = false
         notify_playback_property_list_changed()
 
 
-func ready() -> void:
+func activate() -> void:
     _ensure_runtime_connections()
     _connect_playback_resource_watchers()
     sync_values(true)
     _update_process_state()
 
 
-func exit_tree() -> void:
+func deactivate() -> void:
     _disconnect_playback_resource_watchers()
 
 
-func process(delta: float) -> void:
+func advance(delta: float) -> void:
     _runtime.update(delta)
 
 
@@ -56,6 +67,11 @@ func events_changed() -> void:
     _connect_playback_resource_watchers()
     sanitize_playback_selection()
     notify_playback_property_list_changed()
+
+
+func apply_player_config() -> void:
+    for player in _players:
+        _configure_player.call(player)
 
 
 func sync_values(rebuild := false) -> void:
@@ -68,7 +84,7 @@ func sync_values(rebuild := false) -> void:
                 player.queue_free()
         _players = []
         var index := 0
-        var max_tracks: int = _owner.get("max_tracks")
+        var max_tracks: int = _owner.max_tracks
         while index < max_tracks:
             var player: Node = _make_player.call()
             _players.append(player)
@@ -77,15 +93,13 @@ func sync_values(rebuild := false) -> void:
             index += 1
         _runtime.set_players(_players)
 
-    for player in _players:
-        _configure_player.call(player)
-
+    apply_player_config()
     _sync_editor_playback()
     _update_process_state()
 
 
 func play(event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {}) -> void:
-    var bank: SfxBank = _owner.get("bank")
+    var bank: SfxBank = _owner.bank
     if not bank:
         return
 
@@ -125,7 +139,7 @@ func get_event_visualization_state(event_name: StringName) -> Dictionary:
 
 
 func play_automation(event_name: StringName, automation_name: StringName, value: float = 0.0, restart: bool = false) -> void:
-    var bank: SfxBank = _owner.get("bank")
+    var bank: SfxBank = _owner.bank
     if not bank:
         return
 
@@ -135,7 +149,7 @@ func play_automation(event_name: StringName, automation_name: StringName, value:
 
 
 func stop_automation(event_name: StringName, automation_name: StringName, immediate: bool = false) -> void:
-    var bank: SfxBank = _owner.get("bank")
+    var bank: SfxBank = _owner.bank
     if not bank:
         return
 
@@ -154,7 +168,7 @@ func validate_property(property: Dictionary) -> void:
 
 
 func build_playback_effect_hint() -> String:
-    var bank: SfxBank = _owner.get("bank")
+    var bank: SfxBank = _owner.bank
     if not bank:
         return ""
 
@@ -181,25 +195,25 @@ func build_playback_automation_hint() -> String:
 
 func sanitize_playback_selection() -> void:
     var event := _find_playback_event()
-    var effect: StringName = _owner.get("playback_effect")
+    var effect: StringName = _owner.playback_effect
     if not String(effect).is_empty() and not event:
-        _owner.set("playback_effect", &"")
-        _owner.set("playback_automation", &"")
+        _owner.playback_effect = &""
+        _owner.playback_automation = &""
         return
 
-    var automation_name: StringName = _owner.get("playback_automation")
+    var automation_name: StringName = _owner.playback_automation
     if String(automation_name).is_empty() or not event:
         return
 
     for automation in event.automations:
         if automation and automation.parameter_name == automation_name:
             return
-    _owner.set("playback_automation", &"")
+    _owner.playback_automation = &""
 
 
 func _find_playback_event() -> SfxEvent:
-    var bank: SfxBank = _owner.get("bank")
-    var effect: StringName = _owner.get("playback_effect")
+    var bank: SfxBank = _owner.bank
+    var effect: StringName = _owner.playback_effect
     if not bank or not effect:
         return null
     return bank.get_event(effect)
@@ -236,10 +250,10 @@ func _sync_editor_playback() -> void:
     if not Engine.is_editor_hint() or not _owner.is_inside_tree():
         return
 
-    var enabled: bool = _owner.get("playback_enabled")
-    var effect: StringName = _owner.get("playback_effect")
-    var automation: StringName = _owner.get("playback_automation")
-    var automation_value: float = _owner.get("playback_automation_value")
+    var enabled: bool = _owner.playback_enabled
+    var effect: StringName = _owner.playback_effect
+    var automation: StringName = _owner.playback_automation
+    var automation_value: float = _owner.playback_automation_value
 
     var config_changed := (
         not enabled == _preview_enabled
@@ -272,10 +286,10 @@ func _sync_editor_playback() -> void:
 
 
 func _store_preview_state() -> void:
-    _preview_enabled = _owner.get("playback_enabled")
-    _preview_effect = _owner.get("playback_effect")
-    _preview_automation = _owner.get("playback_automation")
-    _preview_automation_value = _owner.get("playback_automation_value")
+    _preview_enabled = _owner.playback_enabled
+    _preview_effect = _owner.playback_effect
+    _preview_automation = _owner.playback_automation
+    _preview_automation_value = _owner.playback_automation_value
 
 
 func _reset_preview_state() -> void:
@@ -291,7 +305,7 @@ func _update_process_state() -> void:
 
 
 func _connect_playback_resource_watchers() -> void:
-    var bank: SfxBank = _owner.get("bank")
+    var bank: SfxBank = _owner.bank
     if not Engine.is_editor_hint() or not bank:
         return
 

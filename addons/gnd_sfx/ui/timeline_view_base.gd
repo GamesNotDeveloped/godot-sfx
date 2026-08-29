@@ -44,6 +44,10 @@ var _lane_views: Array[TrackLaneView] = []
 
 
 func _ready() -> void:
+    # Connected in code, not in .tscn: this base is shared by two scenes
+    # (timeline_view.tscn, automation_timeline_view.tscn), so wiring here
+    # keeps a single source of truth instead of duplicating 10 connections
+    # in both files.
     _sync_header_width()
     _ruler.draw.connect(_draw_ruler)
     _ruler.gui_input.connect(_on_ruler_gui_input)

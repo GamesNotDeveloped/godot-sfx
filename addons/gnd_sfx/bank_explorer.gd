@@ -17,7 +17,6 @@ const EventViewerScene := preload("res://addons/gnd_sfx/ui/event_viewer.tscn")
 
 func _ready() -> void:
     _bank_viewer.bank = demo_bank
-    _bank_viewer.event_requested.connect(_on_event_requested)
     _player.bank = demo_bank
 
 

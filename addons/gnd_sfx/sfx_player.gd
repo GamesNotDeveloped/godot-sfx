@@ -23,7 +23,7 @@ var _core := SfxPlayerCore.new(
 @export var max_polyphony: int = 1:
     set(value):
         max_polyphony = value
-        _core.sync_values()
+        _core.apply_player_config()
 
 @export_group("Playback", "playback")
 @export var playback_enabled: bool = false:
@@ -54,19 +54,19 @@ var _core := SfxPlayerCore.new(
 
 
 func _enter_tree() -> void:
-    _core.enter_tree()
+    _core.initialize()
 
 
 func _ready() -> void:
-    _core.ready()
+    _core.activate()
 
 
 func _exit_tree() -> void:
-    _core.exit_tree()
+    _core.deactivate()
 
 
 func _process(delta: float) -> void:
-    _core.process(delta)
+    _core.advance(delta)
 
 
 func _validate_property(property: Dictionary) -> void:
