@@ -1,6 +1,21 @@
 extends RefCounted
 class_name WaveformPreviewCache
 
+## Builds and caches the min/max envelope data TimelineView/
+## AutomationTimelineView draw as a waveform for each clip's stream -
+## get_clip_preview() decodes a stream once (async, see below) and reuses
+## the result for every clip that shares that same stream afterwards.
+##
+## Decoding a long stream sample-by-sample used to block the whole engine
+## for however long that took (multi-second stalls on real audio files).
+## get_clip_preview() and the whole chain under it are coroutines that
+## yield to the engine roughly every 8ms of decode work (see
+## _build_playback_preview_from_instance), so callers must `await` it;
+## callers in this addon (TimelineViewBase._assign_waveform_preview) fire
+## it off per-bar without awaiting the call site itself, so lane layout
+## stays instant and each bar's waveform fills in once its own decode
+## finishes.
+
 const ENVELOPE_BUCKET_COUNT := 256
 const MAX_SAMPLES_PER_BUCKET := 256
 
@@ -41,18 +56,18 @@ static func get_clip_name(clip: SfxClip) -> String:
         if stream_name:
             return stream_name
     var source_path := _resolve_stream_source_path(stream)
-    if not source_path.is_empty():
+    if source_path:
         return source_path.get_file().get_basename()
     return stream.get_class()
 
 
 static func _get_stream_preview(stream: AudioStream) -> Dictionary:
     var cache_key := _build_stream_cache_key(stream)
-    if not cache_key.is_empty() and _preview_cache.has(cache_key):
+    if cache_key and _preview_cache.has(cache_key):
         return _preview_cache[cache_key]
 
     var preview: Dictionary = await _build_preview_for_stream(stream)
-    if not cache_key.is_empty():
+    if cache_key:
         _preview_cache[cache_key] = preview
     return preview
 
@@ -79,7 +94,7 @@ static func _build_stream_cache_key(stream: AudioStream) -> String:
             randomizer.playback_mode,
             "|".join(child_keys),
         ]
-    if not stream.resource_path.is_empty():
+    if stream.resource_path:
         return "path://%s" % stream.resource_path
     if stream is AudioStreamWAV:
         var wav := stream as AudioStreamWAV
@@ -116,11 +131,11 @@ static func _build_randomizer_preview(stream: AudioStreamRandomizer) -> Dictiona
         var preview: Dictionary = await _get_stream_preview(child_stream)
         var preview_mins: PackedFloat32Array = preview.get("mins", PackedFloat32Array())
         var preview_maxs: PackedFloat32Array = preview.get("maxs", PackedFloat32Array())
-        if preview_mins.is_empty() or preview_maxs.is_empty():
+        if not preview_mins or not preview_maxs:
             continue
         previews.append(preview)
 
-    if previews.is_empty():
+    if not previews:
         return _build_empty_preview("RAND")
     if previews.size() == 1:
         return previews[0]
@@ -220,7 +235,7 @@ static func _build_playback_preview_from_instance(playback: AudioStreamPlayback,
     while decoded_frames < total_frames:
         var chunk_size := mini(2048, total_frames - decoded_frames)
         var mixed: PackedVector2Array = playback.mix_audio(1.0, chunk_size)
-        if mixed.is_empty():
+        if not mixed:
             break
         for sample_vector in mixed:
             var amplitude := clampf((sample_vector.x + sample_vector.y) * 0.5, -1.0, 1.0)
@@ -283,15 +298,11 @@ static func _build_empty_preview(label := "") -> Dictionary:
 
 
 static func _resolve_stream_source_path(stream: AudioStream) -> String:
-    if not stream:
-        return ""
-    if stream.resource_path.is_empty():
-        return ""
-    return stream.resource_path
+    return stream.resource_path if stream else ""
 
 
 static func sample_envelope_array(values: PackedFloat32Array, ratio: float) -> float:
-    if values.is_empty():
+    if not values:
         return 0.0
     if values.size() == 1:
         return values[0]

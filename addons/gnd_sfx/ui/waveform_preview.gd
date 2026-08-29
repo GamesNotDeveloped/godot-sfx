@@ -94,7 +94,7 @@ func _draw() -> void:
     if full_rect.size.x <= 0.0 or full_rect.size.y <= 0.0:
         return
 
-    var strip_height := minf(name_strip_height, full_rect.size.y) if not _clip_name.is_empty() else 0.0
+    var strip_height := minf(name_strip_height, full_rect.size.y) if _clip_name else 0.0
     var content_rect := Rect2(Vector2(0.0, strip_height), Vector2(full_rect.size.x, full_rect.size.y - strip_height))
 
     draw_rect(content_rect, fill_color, true)
@@ -109,7 +109,7 @@ func _draw() -> void:
         var cursor_x := _cursor_ratio * content_rect.size.x
         draw_line(Vector2(cursor_x, content_rect.position.y), Vector2(cursor_x, content_rect.position.y + content_rect.size.y), cursor_color, cursor_width)
 
-    if not _preview_label.is_empty():
+    if _preview_label:
         var font: Font = get_theme_default_font()
         var font_size := maxi(get_theme_default_font_size() - 2, 10)
         if font:
@@ -151,7 +151,7 @@ func _draw_name_strip(rect: Rect2, strip_height: float) -> void:
 
 
 func _draw_waveform_envelope(rect: Rect2) -> void:
-    if _mins.is_empty() or _maxs.is_empty():
+    if not _mins or not _maxs:
         return
     var envelope_color := synthetic_line_color if not (_preview_kind == "file") else line_color
     var polygon := _build_waveform_polygon(rect)

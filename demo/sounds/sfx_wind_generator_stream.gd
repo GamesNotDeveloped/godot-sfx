@@ -2,7 +2,20 @@
 extends SfxGeneratorPlayback
 class_name SfxWindGeneratorPlayback
 
+## Example SfxGeneratorPlayback that synthesizes wind noise instead of
+## playing back a sample - a more involved companion to
+## demo_tone_generator_playback.gd. Filters white noise through three
+## one-pole low-pass filters at different cutoffs ("dark"/"bright"/"side"
+## in _fill_buffer) to shape its tone, then modulates cutoff and gain with
+## slow randomized envelope followers ("gust"/"flutter"/"shimmer") so the
+## result drifts and gusts instead of sounding like static. An
+## "automation_value" from context (typically bound to a "speed"
+## parameter) drives how strong and how bright the wind is.
 
+## Per-voice filter state. The "_lp" fields are each one-pole low-pass
+## filter outputs (see _cutoff_to_alpha) that get updated one sample at a
+## time in _fill_buffer; kept here rather than as @export vars because one
+## resource can be shared by several simultaneous voices.
 class RuntimeState:
     var playback: AudioStreamGeneratorPlayback
     var rng := RandomNumberGenerator.new()
@@ -17,13 +30,24 @@ class RuntimeState:
 const TAU := PI * 2.0
 const OUTPUT_HEADROOM := 0.22
 
+## Should match the clip's AudioStreamGenerator.mix_rate.
 @export_range(8000, 96000, 100) var mix_sample_rate := 32000
+## Should match the clip's AudioStreamGenerator.buffer_length.
 @export_range(0.05, 2.0, 0.01) var buffer_length_sec := 0.35
+## How much high-frequency ("bright"/hiss) content to mix in, sampled by
+## the current speed.
 @export var bright_gain_curve: Curve
+## How much low-frequency ("dark"/rumble) content to mix in, sampled by
+## the current speed.
 @export var dark_gain_curve: Curve
+## Overall output level, sampled by the current speed.
 @export var master_gain_curve: Curve
+## How much the left/right channels are allowed to differ.
 @export_range(0.0, 1.0, 0.01) var stereo_width := 0.35
+## How much gustiness dips the output level, versus staying at a steady
+## volume.
 @export_range(0.0, 1.0, 0.01) var turbulence_amount := 0.18
+## RNG seed for reproducible wind; 0 means randomize per voice instead.
 @export var seed := 0
 
 
@@ -49,6 +73,11 @@ func update(state, context: Dictionary) -> void:
     _fill_buffer(runtime, speed)
 
 
+## The actual synthesis loop, one output frame at a time: generates white
+## noise, runs it through slow low-pass "envelope follower" filters to get
+## gust/flutter/shimmer modulation values, uses those to drive three tone-
+## shaping low-pass filters (dark/bright/side) whose outputs are mixed
+## into a mono signal and split into stereo via the side channel.
 func _fill_buffer(runtime: RuntimeState, speed: float) -> void:
     var frames_available := runtime.playback.get_frames_available()
     if frames_available <= 0:
@@ -102,6 +131,10 @@ func _fill_buffer(runtime: RuntimeState, speed: float) -> void:
         ))
 
 
+## Samples one of the gain curves at an arbitrary `speed` value, remapping
+## it onto the curve's own domain first - so the curve's X axis can be
+## authored in whatever range is convenient regardless of how `speed`
+## itself is scaled.
 func _sample_speed_curve(curve: Curve, speed: float, default_value: float) -> float:
     if not curve:
         return default_value
@@ -117,5 +150,8 @@ func _sample_speed_curve(curve: Curve, speed: float, default_value: float) -> fl
     return curve.sample_baked(sample_position)
 
 
+## Converts a filter cutoff frequency to the smoothing coefficient a
+## one-pole low-pass filter needs at this sample rate (higher cutoff or
+## lower sample rate -> the filter output chases new values faster).
 func _cutoff_to_alpha(cutoff_hz: float, sample_rate: float) -> float:
     return clampf(1.0 - exp(-TAU * maxf(cutoff_hz, 0.001) / maxf(sample_rate, 1.0)), 0.0, 1.0)

@@ -2,6 +2,11 @@
 extends Resource
 class_name SfxBank
 
+## A named collection of SfxEvents, looked up by name at runtime (see
+## get_event) - what SfxPlayer.bank/SfxPlayer3D.bank point at. Roughly
+## FMOD's "bank": the unit a game loads to make a set of related sounds
+## available.
+
 @export var events: Array[SfxEvent] = []:
     set(value):
         events = value

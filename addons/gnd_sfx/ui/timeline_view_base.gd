@@ -5,6 +5,13 @@ class_name TimelineViewBase
 ## AutomationTimelineView (parameter-domain axis). Subclasses declare
 ## `_zoom`/`_view_offset` fields and override the axis-specific hooks below;
 ## everything else (ruler drawing, scrollbar wiring, zoom buttons) lives here.
+##
+## The two axes differ enough (Timeline zooms by pixels-per-second against
+## a fixed pixels_per_second export; Automation zooms by a fraction of its
+## own min_domain..max_domain) that the shared math below is expressed
+## entirely in terms of a "visible range" {start, end} dictionary in
+## whatever units the subclass's axis uses - see the hooks section near
+## the bottom of this file for the contract each subclass implements.
 
 const TrackLaneViewScene := preload("./track_lane_view.tscn")
 
@@ -126,7 +133,7 @@ func _assign_waveform_preview(bar: WaveformPreview, clip: SfxClip) -> void:
 
 
 func _get_waveform_width() -> float:
-    if not _lane_views.is_empty():
+    if _lane_views:
         var first_canvas: Control = _lane_views[0].waveform
         return maxf(first_canvas.size.x, 1.0)
     if is_instance_valid(_ruler):
@@ -190,7 +197,7 @@ func _draw_ruler() -> void:
         tick_value += step
 
     var cursor_state := _get_cursor_state()
-    if bool(cursor_state["visible"]) and not _lane_views.is_empty():
+    if bool(cursor_state["visible"]) and _lane_views:
         var ratio := _axis_value_to_ratio(float(cursor_state["value"]), visible_range)
         if ratio >= 0.0 and ratio <= 1.0:
             var x := wave_start + (ratio * wave_width)
@@ -284,34 +291,65 @@ func _on_ruler_gui_input(event: InputEvent) -> void:
 
 
 # --- axis-specific hooks implemented by TimelineView / AutomationTimelineView ---
+# GDScript has no formal interface keyword; these no-op/default
+# implementations exist so the base class stays instantiable and so each
+# hook's contract is documented in one place instead of only where it's
+# called from.
 
+## Called at the end of _ready(), after all the shared signal wiring
+## above. Subclasses use this to flush a pending rebuild queued before the
+## node was ready, or to do their first layout pass.
 func _on_ready_finished() -> void:
     pass
 
 
+## Returns {"start": <axis value>, "end": <axis value>} for whatever's
+## currently visible, given the subclass's own `_zoom`/`_view_offset`.
+## Everything else in this base file (ruler ticks, cursor position,
+## scrollbar range) is computed from this range rather than from `_zoom`
+## directly, so it doesn't need to know which axis it's looking at.
 func _get_visible_range() -> Dictionary:
     return {"start": 0.0, "end": 1.0}
 
 
+## Clamps a view offset to a valid range for the given visible span (or,
+## if `_visible_span` is negative, recomputes the current span first).
+## Subclasses implement this since "valid range" depends on the axis's own
+## total extent (event duration vs. automation min_domain..max_domain).
 func _clamp_view_offset(value: float, _visible_span := -1.0) -> float:
     return value
 
 
+## The largest `_view_offset` allowed for a given visible span, i.e. how
+## far the view can scroll before it would show past the end of the axis.
 func _get_max_view_offset(_visible_span: float) -> float:
     return 0.0
 
 
+## Called (deferred, at most once per frame) whenever layout needs to
+## recompute - lane positions, bar sizes/waveform windows, cursors,
+## navigation controls. This is where TimelineView/AutomationTimelineView
+## do their actual per-lane work; the base class only manages *when* to
+## call it (see _queue_layout_refresh).
 func _flush_layout_refresh() -> void:
     pass
 
 
+## Formats one ruler tick label for the current axis (e.g. "1.25s" for
+## time, a plain number for a parameter domain).
 func _format_ruler_label(value: float) -> String:
     return "%.2f" % value
 
 
+## Formats the small "Time: 0.00 -> 2.50s" / "Domain: 0 -> 100" label
+## above the ruler for the given visible range.
 func _format_axis_label(_visible_range: Dictionary) -> String:
     return ""
 
 
+## Returns {"visible": bool, "value": <axis value>} for the vertical
+## "playhead" cursor line _draw_ruler draws, if any. TimelineView merges
+## its auto-follow and manually-scrubbed cursor into one value here;
+## AutomationTimelineView just reports its single domain cursor.
 func _get_cursor_state() -> Dictionary:
     return {"visible": false, "value": 0.0}

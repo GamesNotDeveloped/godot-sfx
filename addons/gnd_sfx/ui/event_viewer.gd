@@ -1,6 +1,12 @@
 extends Window
 class_name EventViewer
 
+## Popup preview/debug window for one SfxEvent, opened from BankViewer.
+## Shows a "Tracks" tab (TimelineView) plus one tab per named automation
+## (AutomationTimelineView), transport controls that drive `player`
+## directly, and a slider/spinbox pair per automation parameter for
+## manual testing. Purely a dev tool - not used by SfxPlaybackRuntime.
+
 const TracksTimelineViewScene := preload("./timeline_view.tscn")
 const AutomationTimelineViewScene := preload("./automation_timeline_view.tscn")
 const ParameterEditorScene := preload("./parameter_editor.tscn")
@@ -117,7 +123,7 @@ func _rebuild_parameter_controls() -> void:
 
     _no_params_label.hide()
 
-    if not event or event.automations.is_empty():
+    if not event or not event.automations:
         _no_params_label.text = "No automations"
         _no_params_label.show()
         return

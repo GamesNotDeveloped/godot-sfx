@@ -83,7 +83,7 @@ func _rebuild_lanes() -> void:
     _clear_track_cells()
     _lane_views.clear()
 
-    if _clips.is_empty():
+    if not _clips:
         _empty_label.text = empty_message
         _empty_label.show()
         _refresh_labels()

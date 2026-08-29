@@ -62,8 +62,8 @@ func _apply_track() -> void:
     if not has_track:
         title_label.text = ""
         return
-    var track_name := String(track.track_name)
-    title_label.text = track_name if not track_name.is_empty() else "Track %d" % (index + 1)
+    var track_name: String = track.track_name
+    title_label.text = track_name if track_name else "Track %d" % (index + 1)
     solo_button.button_pressed = track.solo
     mute_button.button_pressed = track.mute
     _sync_gain_controls(track.volume_db)

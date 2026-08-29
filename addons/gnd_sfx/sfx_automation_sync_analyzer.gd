@@ -2,6 +2,15 @@
 extends RefCounted
 class_name SfxAutomationSyncAnalyzer
 
+## Offline PCM analysis used by SfxAutomationInspectorPlugin's auto-sync
+## button. Given an SfxAutomation with several looping clips (e.g. idle/
+## mid/high RPM engine samples), it estimates the shared cycle length
+## ("phase period") they loop at, how far each clip is phase-shifted
+## relative to the others, and - for streams whose loop point can be
+## edited - a seamless loop offset near the end of the sample. None of
+## this touches playback; it decodes each stream once, offline, purely to
+## measure it.
+
 const ANALYSIS_SAMPLE_RATE := 4000.0
 const MIN_PHASE_PERIOD := 0.05
 const MAX_PHASE_PERIOD := 0.5
@@ -22,6 +31,14 @@ const PERIOD_CLUSTER_ABSOLUTE_TOLERANCE := 0.02
 const PERIOD_CLUSTER_RELATIVE_TOLERANCE := 0.08
 
 
+## Entry point used by the inspector plugin. Decodes every clip's stream,
+## finds the phase period shared by the clips, resolves each clip's phase
+## offset relative to that period, and (for clips whose stream supports
+## it) estimates a loop point. Returns
+## {ok: true, phase_period, clip_results: [{clip, phase_offset,
+## loop_offset?}], warnings} on success, or {ok: false, error, warnings}
+## if there isn't enough usable audio (fewer than two readable/periodic
+## clips) to produce a result.
 static func analyze_automation(automation: SfxAutomation) -> Dictionary:
     var clip_data: Array[Dictionary] = []
     var warnings: PackedStringArray = []
@@ -31,7 +48,7 @@ static func analyze_automation(automation: SfxAutomation) -> Dictionary:
             continue
 
         var decoded := _decode_stream_to_mono(clip.stream)
-        if decoded.is_empty():
+        if not decoded:
             warnings.append("Skipped a clip with unreadable audio stream.")
             continue
 
@@ -128,10 +145,13 @@ static func analyze_automation(automation: SfxAutomation) -> Dictionary:
     }
 
 
+## Removes DC offset (subtracts the mean) and rescales to a peak amplitude
+## of 1.0, so clips recorded or normalized at different levels compare
+## fairly during correlation.
 static func normalize_samples(samples: PackedFloat32Array) -> PackedFloat32Array:
     var normalized := PackedFloat32Array()
     normalized.resize(samples.size())
-    if samples.is_empty():
+    if not samples:
         return normalized
 
     var mean := 0.0
@@ -153,12 +173,16 @@ static func normalize_samples(samples: PackedFloat32Array) -> PackedFloat32Array
     return normalized
 
 
+## Downsamples to a lower analysis rate by averaging blocks of samples,
+## then normalizes. Analysis only needs the coarse waveform shape, not
+## full audio quality, so working at a low rate keeps every correlation
+## pass below cheap enough to run synchronously in the editor.
 static func resample_and_normalize(
     samples: PackedFloat32Array,
     input_rate: float,
     target_rate: float
 ) -> Dictionary:
-    if samples.is_empty():
+    if not samples:
         return {"samples": PackedFloat32Array(), "sample_rate": target_rate}
 
     var step := 1
@@ -182,11 +206,17 @@ static func resample_and_normalize(
     }
 
 
+## Cuts off the lead-in before stream_offset, since that portion is
+## usually a one-shot attack rather than the repeating body that period
+## and loop-point analysis should look at.
 static func trim_samples(samples: PackedFloat32Array, sample_rate: float, start_seconds: float) -> PackedFloat32Array:
     var start_index := clampi(int(round(start_seconds * sample_rate)), 0, samples.size())
     return slice_samples(samples, start_index, samples.size() - start_index)
 
 
+## Sub-array extraction that clamps the requested range to the array's
+## bounds instead of erroring, so callers can pass rough estimates without
+## bounds-checking them first.
 static func slice_samples(samples: PackedFloat32Array, start: int, length: int) -> PackedFloat32Array:
     var safe_start := clampi(start, 0, samples.size())
     var safe_end := clampi(safe_start + max(length, 0), safe_start, samples.size())
@@ -197,6 +227,11 @@ static func slice_samples(samples: PackedFloat32Array, start: int, length: int) 
     return sliced
 
 
+## Autocorrelation-based period detection: for every candidate lag between
+## min/max period, correlates the signal against a copy of itself shifted
+## by that lag, and returns the lag with the strongest match. That's the
+## clip's repeating cycle length. Returns 0.0 if no period could be found
+## (e.g. not enough samples, or no lag correlates well).
 static func estimate_period(
     samples: PackedFloat32Array,
     sample_rate: float,
@@ -236,6 +271,9 @@ static func estimate_period(
     return float(best_lag) / sample_rate
 
 
+## Cross-correlation between two clips: finds how far target_samples is
+## shifted relative to reference_samples within a single period, so the
+## two clips' cycles can be phase-aligned when crossfaded together.
 static func estimate_phase_offset(
     reference_samples: PackedFloat32Array,
     target_samples: PackedFloat32Array,
@@ -243,7 +281,7 @@ static func estimate_phase_offset(
     period_seconds: float
 ) -> float:
     var period_samples: int = max(1, int(round(period_seconds * sample_rate)))
-    if reference_samples.is_empty() or target_samples.is_empty() or period_samples <= 1:
+    if not reference_samples or not target_samples or period_samples <= 1:
         return 0.0
 
     var window: int = min(reference_samples.size(), target_samples.size(), period_samples * 4)
@@ -274,6 +312,14 @@ static func estimate_phase_offset(
     return float(best_lag) / sample_rate
 
 
+## Finds where a stream's tail can seamlessly loop back into itself: takes
+## a short window at the very end of the stream and searches earlier
+## candidate seams for the best waveform match, scored by similarity plus
+## how well the resulting loop length lines up with the shared phase
+## period. If target_loop_duration_seconds is given (from
+## _select_shared_loop_duration), that exact duration is used directly
+## instead of searching, so every clip in the automation shares one loop
+## length.
 static func estimate_loop_offset(
     samples: PackedFloat32Array,
     sample_rate: float,
@@ -283,7 +329,7 @@ static func estimate_loop_offset(
     target_loop_duration_seconds := -1.0,
     stream_duration_seconds := -1.0
 ) -> float:
-    if samples.is_empty() or sample_rate <= 0.0:
+    if not samples or sample_rate <= 0.0:
         return maxf(search_start_seconds, 0.0)
 
     var duration_seconds := stream_duration_seconds if stream_duration_seconds > 0.0 else float(samples.size()) / sample_rate
@@ -345,6 +391,10 @@ static func estimate_loop_offset(
     return float(best_index) / sample_rate
 
 
+## Renders the whole stream to raw mono float samples through a throwaway
+## AudioStreamPlayback, purely for offline analysis - this never goes
+## through an actual AudioStreamPlayer. Returns {} if the stream can't be
+## decoded (empty length, no playback instance).
 static func _decode_stream_to_mono(stream: AudioStream) -> Dictionary:
     if not stream or stream.get_length() <= 0.0:
         return {}
@@ -369,10 +419,15 @@ static func _decode_stream_to_mono(stream: AudioStream) -> Dictionary:
     }
 
 
+## True only for stream types whose loop point can actually be edited and
+## persisted to disk - see SfxStreamLoopSupport for which types those are.
 static func _supports_loop_offset(stream: AudioStream) -> bool:
     return SfxStreamLoopSupport.supports_persisted_loop_offset(stream)
 
 
+## Cosine-similarity-style score between two equal-purpose sample windows:
+## close to 1.0 for near-identical waveforms, lower (down to -1.0) for
+## dissimilar ones. Used to grade how seamless a candidate loop seam is.
 static func _normalized_dot(lhs: PackedFloat32Array, rhs: PackedFloat32Array) -> float:
     var size := min(lhs.size(), rhs.size())
     if size == 0:
@@ -394,6 +449,9 @@ static func _normalized_dot(lhs: PackedFloat32Array, rhs: PackedFloat32Array) ->
     return numerator / denominator
 
 
+## Distance between two phase values on a circle of the given period, so
+## e.g. a value near 0 and one near `period` are treated as close instead
+## of far apart.
 static func _circular_distance(lhs: float, rhs: float, period: float) -> float:
     if period <= 0.0:
         return 0.0
@@ -401,8 +459,11 @@ static func _circular_distance(lhs: float, rhs: float, period: float) -> float:
     return minf(delta, period - delta)
 
 
+## Median of a list of per-clip period estimates. Used instead of a mean
+## because a single clip with a bad estimate shouldn't drag the shared
+## period toward it.
 static func _median(values: Array[float]) -> float:
-    if values.is_empty():
+    if not values:
         return 0.0
     var sorted := values.duplicate()
     sorted.sort()
@@ -412,8 +473,12 @@ static func _median(values: Array[float]) -> float:
     return 0.5 * (sorted[middle - 1] + sorted[middle])
 
 
+## Given one period estimate per clip, finds the largest cluster of
+## mutually-close estimates and returns its median as the "consensus"
+## shared period - this way one or two clips whose autocorrelation picked
+## the wrong lag don't throw off the result for the rest.
 static func _select_consensus_period(values: Array[float]) -> float:
-    if values.is_empty():
+    if not values:
         return 0.0
     if values.size() <= 2:
         return _median(values)
@@ -429,7 +494,7 @@ static func _select_consensus_period(values: Array[float]) -> float:
             if absf(value - seed) <= tolerance:
                 cluster.append(value)
 
-        if cluster.is_empty():
+        if not cluster:
             continue
 
         var center := _median(cluster)
@@ -455,14 +520,18 @@ static func _select_consensus_period(values: Array[float]) -> float:
                 best_variance = variance
                 best_center = center
 
-    if best_cluster.is_empty():
+    if not best_cluster:
         return _median(values)
     return _median(best_cluster)
 
 
+## Chains adjacent-pair phase offsets (clip 1 relative to clip 0, clip 2
+## relative to clip 1, ...) into one absolute offset per clip, so every
+## clip ends up aligned to a single shared reference point rather than
+## only to its immediate neighbor.
 static func _resolve_clip_phase_offsets(clip_data: Array[Dictionary], phase_period: float) -> Array[float]:
     var phase_offsets: Array[float] = []
-    if clip_data.is_empty():
+    if not clip_data:
         return phase_offsets
 
     phase_offsets.resize(clip_data.size())
@@ -482,8 +551,12 @@ static func _resolve_clip_phase_offsets(clip_data: Array[Dictionary], phase_peri
     return phase_offsets
 
 
+## Picks one loop length all clips in the automation can share: the
+## shortest clip's stream duration, rounded down to a whole number of
+## phase periods when one is known (a partial cycle at the loop point
+## would desync the clips from each other on every repeat).
 static func _select_shared_loop_duration(clip_data: Array[Dictionary], phase_period: float = 0.0) -> float:
-    if clip_data.is_empty():
+    if not clip_data:
         return 0.0
 
     var shortest_duration := INF

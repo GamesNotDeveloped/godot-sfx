@@ -38,15 +38,15 @@ func _refresh() -> void:
             valid_events.append(event as SfxEvent)
 
     _summary_label.text = "%d events" % valid_events.size()
-    if valid_events.is_empty():
+    if not valid_events:
         _empty_label.text = "This bank does not define any events."
         _empty_label.show()
         return
 
     _empty_label.hide()
     for event in valid_events:
-        var name_text := String(event.name)
-        if name_text.is_empty():
+        var name_text: String = event.name
+        if not name_text:
             name_text = "Unnamed Event"
         var button: Button = BankEventButtonScene.instantiate()
         button.text = "%s    %d timeline clips    %d automations" % [

@@ -1,10 +1,37 @@
 extends RefCounted
 class_name SfxPlaybackRuntime
 
+## The actual playback engine behind SfxPlayer/SfxPlayer3D (via
+## SfxPlayerCore) - those are thin Node wrappers that just own a pool of
+## AudioStreamPlayer(3D) nodes and forward calls here. This class owns no
+## nodes itself and knows nothing about the scene tree beyond the player
+## pool it's given via set_players(); call update(delta) once per frame to
+## drive it.
+##
+## Vocabulary used throughout this file:
+## - An EventInstance is one "playing" of an SfxEvent (play() creates one;
+##   polyphony_enabled controls whether a second play() while one is
+##   already active starts a second instance or replaces the first).
+## - An ActiveVoice is one AudioStreamPlayer(3D) currently playing one
+##   SfxClip for one EventInstance (a single instance can own several
+##   voices at once: one per timeline/sustain clip that has triggered, and
+##   one per active automation clip).
+## - "Automation" voices are driven by a named parameter (see
+##   SfxAutomation) rather than by elapsed time; modulate()/
+##   set_parameters() move that parameter and voices start, stop, or
+##   crossfade as it crosses clip boundaries.
+## - Both the event and its per-track mixer settings (mute/solo/volume_db)
+##   and ADSR can independently gate a voice's gain - see
+##   _resolve_track_mixer_gain / _current_adsr_gain / _current_track_adsr_gain.
+
 enum AdsrStage { IDLE, ATTACK, DECAY, SUSTAIN, RELEASE, STOPPED }
 enum PlaybackStatus { STOPPED, PLAYING, RELEASING }
 
 
+## A standard attack/decay/sustain/release envelope, reused for both an
+## EventInstance's own ADSR (event.adsr_enabled) and a voice's per-track
+## ADSR (SfxTrack.adsr_enabled) - two independent envelopes can gate the
+## same voice's gain at once.
 class AdsrEnvelope:
     var stage: AdsrStage = AdsrStage.IDLE
     var elapsed := 0.0
@@ -66,6 +93,10 @@ class AdsrEnvelope:
         return release > 0.0
 
 
+## One in-progress playing of an SfxEvent, created by play() and torn down
+## once every voice it owns has finished and its ADSR (if any) has fully
+## released. Tracks which timeline/sustain/automation clips have already
+## triggered so they aren't re-triggered every frame.
 class EventInstance:
     var event: SfxEvent
     var event_name: StringName = &""
@@ -79,6 +110,10 @@ class EventInstance:
     var triggered_automation_clips := {}
 
 
+## One AudioStreamPlayer(3D) currently assigned to play one SfxClip for one
+## EventInstance. `player_token` lets the runtime tell "this voice still
+## owns that player" apart from "that player was stolen/reset and reused
+## for something else" after the fact (see _voice_owns_player).
 class ActiveVoice:
     var player
     var event_instance: EventInstance
@@ -114,13 +149,20 @@ var _player_tokens := {}
 var _voice_creation_counter := 0
 
 
+## Sets the pool of AudioStreamPlayer/AudioStreamPlayer3D nodes this
+## runtime allocates voices from. Called by SfxPlayerCore whenever
+## max_tracks changes and the player pool is rebuilt; existing voices are
+## not migrated, so callers rebuild the pool via clear() first.
 func set_players(players: Array) -> void:
     _players = players
     _notify_process_requirement_changed()
 
 
+## Immediately stops every voice and forgets every instance, with no
+## release/fade-out. Used when the player pool is being rebuilt or torn
+## down, not for normal end-user stop requests (see stop_all/stop_event).
 func clear() -> void:
-    var had_activity := not _active_voices.is_empty() or not _instances.is_empty()
+    var had_activity := _active_voices or _instances
     for voice in _active_voices:
         _cleanup_voice(voice)
     for player in _players:
@@ -132,6 +174,11 @@ func clear() -> void:
         finished.emit()
 
 
+## Connected by SfxPlayerCore to each player's own `finished` signal. Only
+## releases the voice if the player actually stopped on its own (a
+## one-shot clip reaching its end) - a player deliberately stopped by this
+## runtime already went through _release_voice, and Godot still emits
+## `finished` in some of those cases too.
 func handle_player_finished(player) -> void:
     if not is_instance_valid(player):
         return
@@ -143,6 +190,9 @@ func handle_player_finished(player) -> void:
         _release_voice(index)
 
 
+## Advances every active instance and voice by one frame: triggers newly-
+## due timeline/sustain/automation clips, advances ADSR envelopes, and
+## drops voices/instances that have finished. Call once per _process().
 func update(delta: float) -> void:
     var active_instances: Array[EventInstance] = []
     for raw_instances in _instances.values():
@@ -161,6 +211,11 @@ func update(delta: float) -> void:
     _notify_process_requirement_changed()
 
 
+## Starts a new EventInstance for `event`. If event.polyphony_enabled is
+## false, any existing instance of this event is stopped immediately
+## first, so at most one instance ever plays. `offset` seeks the event's
+## own clock forward (for scrubbing/preview); `parameters` seeds the
+## automation parameter values an instance starts with.
 func play(event: SfxEvent, offset := 0.0, parameters: Dictionary = {}) -> void:
     if not event:
         return
@@ -184,6 +239,10 @@ func play(event: SfxEvent, offset := 0.0, parameters: Dictionary = {}) -> void:
     _notify_process_requirement_changed()
 
 
+## Jumps the latest instance of `event_name` to a new playback time by
+## discarding it and replaying a fresh instance at that offset (preserving
+## its ADSR state and release status), rather than trying to fast-forward
+## the existing voices in place.
 func seek(event_name: StringName, offset: float) -> void:
     var instance := _get_latest_instance(event_name)
     if not instance:
@@ -214,6 +273,10 @@ func seek(event_name: StringName, offset: float) -> void:
     _notify_process_requirement_changed()
 
 
+## Updates automation parameter values (e.g. "rpm") for the latest
+## instance of `event_name`, which may start, stop, or crossfade
+## automation voices depending on which clips' domains the new values fall
+## into. Does nothing if the event isn't currently playing.
 func modulate(event_name: StringName, parameters: Dictionary) -> void:
     var instance := _get_latest_instance(event_name)
     if not instance:
@@ -229,6 +292,8 @@ func modulate(event_name: StringName, parameters: Dictionary) -> void:
     _notify_process_requirement_changed()
 
 
+## Batch form of modulate(): `parameters` maps event_name -> its own
+## parameters dictionary, for updating several playing events in one call.
 func set_parameters(parameters: Dictionary) -> void:
     for event_name in parameters.keys():
         var event_parameters = parameters[event_name]
@@ -236,6 +301,11 @@ func set_parameters(parameters: Dictionary) -> void:
             modulate(StringName(event_name), event_parameters)
 
 
+## Backward-compatible dual-purpose entry point kept for SfxPlayer(3D)'s
+## public API: stop() / stop(true) stops everything (see stop_all), while
+## stop("event_name") / stop("event_name", true) stops just that event
+## (see stop_event). Prefer calling stop_all/stop_event directly from new
+## code - this only exists to keep the old ambiguous call shape working.
 func stop(event_name_or_immediate = null, immediate: bool = false) -> void:
     if event_name_or_immediate is bool:
         stop_all(event_name_or_immediate)
@@ -245,6 +315,9 @@ func stop(event_name_or_immediate = null, immediate: bool = false) -> void:
         stop_all(immediate)
 
 
+## Stops every currently playing instance of every event. With
+## `immediate` false, each instance releases (fades/ADSR-releases) instead
+## of cutting off abruptly.
 func stop_all(immediate: bool = false) -> void:
     var instances_to_stop: Array[EventInstance] = []
     for raw_instances in _instances.values():
@@ -259,6 +332,10 @@ func stop_all(immediate: bool = false) -> void:
     _notify_process_requirement_changed()
 
 
+## Stops the newest stoppable instance of `event_name` (see
+## _get_latest_stoppable_instance - for a polyphonic event this targets
+## the most recent play() call, not all of them). With `immediate` false,
+## it releases instead of cutting off.
 func stop_event(event_name: StringName, immediate: bool = false) -> void:
     var instance := _get_latest_stoppable_instance(event_name)
     if instance:
@@ -268,6 +345,10 @@ func stop_event(event_name: StringName, immediate: bool = false) -> void:
     _notify_process_requirement_changed()
 
 
+## Convenience for driving one automation parameter directly: starts the
+## event (seeded with this parameter value) if it isn't playing yet, or
+## just modulates it if it already is. `restart` forces a fresh instance
+## even if one is already playing.
 func play_automation(event: SfxEvent, automation_name: StringName, value: float = 0.0, restart: bool = false) -> void:
     if not event:
         return
@@ -279,16 +360,29 @@ func play_automation(event: SfxEvent, automation_name: StringName, value: float 
     modulate(event.name, {automation_name: value})
 
 
+## Currently just stops the whole event (see stop_event) - there's no
+## per-automation-parameter stop yet, so `_automation_name` is accepted
+## for API symmetry with play_automation() but not used. Kept as a
+## distinct method (rather than removed) so SfxPlayer(3D)'s public API
+## doesn't need to change if per-parameter stop is added later.
 func stop_automation(event: SfxEvent, _automation_name: StringName, immediate: bool = false) -> void:
     if not event:
         return
     stop_event(event.name, immediate)
 
 
+## True if `event_name` has at least one active instance, including one
+## that's still releasing (fading out / in ADSR release) after a
+## non-immediate stop.
 func is_playing(event_name: StringName) -> bool:
     return not _get_instances_for_event(event_name).is_empty()
 
 
+## Snapshot of the latest instance's state for UI display (TimelineView/
+## AutomationTimelineView playback cursors, EventViewer's transport
+## readout) - not used by playback logic itself. Reports per-clip position
+## within each clip's own visible span so the UI can draw a moving cursor
+## even for clips it isn't actively tracking a voice for.
 func get_event_visualization_state(event_name: StringName) -> Dictionary:
     var instance := _get_latest_instance(event_name)
     if not instance:
@@ -331,8 +425,12 @@ func get_event_visualization_state(event_name: StringName) -> Dictionary:
     }
 
 
+## True while there's anything left for update() to do. SfxPlayerCore
+## listens to process_requirement_changed (emitted whenever this could
+## have changed) to turn the owning Node's _process() on/off, so idle
+## players don't tick every frame for nothing.
 func requires_process() -> bool:
-    return not _active_voices.is_empty() or not _instances.is_empty()
+    return _active_voices or _instances
 
 
 func _update_instance(instance: EventInstance, delta: float) -> void:
@@ -551,7 +649,7 @@ func _get_instances_for_event(event_name: StringName) -> Array[EventInstance]:
 
 func _get_latest_instance(event_name: StringName) -> EventInstance:
     var instances: Array[EventInstance] = _get_instances_for_event(event_name)
-    if instances.is_empty():
+    if not instances:
         return null
     return instances[instances.size() - 1]
 
@@ -588,7 +686,7 @@ func _remove_instance(instance: EventInstance) -> void:
     var index := instances.find(instance)
     if not index == -1:
         instances.remove_at(index)
-    if instances.is_empty():
+    if not instances:
         _instances.erase(instance.event_name)
     else:
         _instances[instance.event_name] = instances
@@ -912,7 +1010,7 @@ func _start_voice(instance: EventInstance, clip: SfxClip, automation: SfxAutomat
         return true
 
     var acquired := _acquire_voice_player_and_stream(clip, automation)
-    if acquired.is_empty():
+    if not acquired:
         return false
     var player = acquired["player"]
     var stream: AudioStream = acquired["stream"]
@@ -1051,7 +1149,7 @@ func _release_voice(index: int) -> void:
         voice.player.pitch_scale = 1.0
     _active_voices.remove_at(index)
 
-    if _active_voices.is_empty() and _instances.is_empty():
+    if not _active_voices and not _instances:
         finished.emit()
 
 
@@ -1122,7 +1220,7 @@ func _stop_event_instance(instance: EventInstance, immediate: bool) -> void:
     if immediate:
         _stop_instance_voices(instance)
         _remove_instance(instance)
-        if _active_voices.is_empty() and _instances.is_empty():
+        if not _active_voices and not _instances:
             finished.emit()
         return
 
@@ -1165,7 +1263,7 @@ func _collect_finished_instances() -> void:
     for instance in finished_instances:
         _remove_instance(instance)
 
-    if _active_voices.is_empty() and _instances.is_empty():
+    if not _active_voices and not _instances:
         finished.emit()
 
 
@@ -1182,14 +1280,14 @@ func _voices_for_instance(instance: EventInstance) -> Array[ActiveVoice]:
 
 
 func _instance_has_pending_release_activity(instance: EventInstance) -> bool:
-    return instance and not _voices_for_instance(instance).is_empty()
+    return instance and _voices_for_instance(instance)
 
 
 func _instance_has_pending_play_activity(instance: EventInstance) -> bool:
     if not instance:
         return false
 
-    if not _voices_for_instance(instance).is_empty():
+    if _voices_for_instance(instance):
         return true
 
     for clip in instance.event.clips:

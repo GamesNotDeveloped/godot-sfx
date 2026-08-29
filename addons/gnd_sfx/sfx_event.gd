@@ -2,6 +2,14 @@
 extends Resource
 class_name SfxEvent
 
+## One playable sound in an SfxBank (e.g. "footstep", "engine_loop") -
+## roughly FMOD's "event". Owns a timeline of `clips` plus any number of
+## parameter-driven `automations`; SfxPlaybackRuntime.play() starts one
+## EventInstance of it. `master_track` is the mixer fallback for any clip
+## that doesn't have its own `track` assigned; attack/decay/sustain/
+## release here gate the whole event's voices together, separate from any
+## individual track's own ADSR.
+
 @export var clips: Array[SfxClip] = []:
     set(value):
         clips = value

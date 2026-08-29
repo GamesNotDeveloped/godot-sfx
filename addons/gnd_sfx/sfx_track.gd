@@ -2,6 +2,12 @@
 extends Resource
 class_name SfxTrack
 
+## Mixer channel for one or more SfxClips within an SfxEvent (mute/solo/
+## volume_db, plus its own optional ADSR release applied when a clip using
+## this track stops). Not a clip's stream or timeline position - just
+## where it's routed for mixing. See SfxClip.track and
+## SfxEvent.master_track.
+
 @export var track_name: StringName = "":
     set(value):
         track_name = value

@@ -175,7 +175,7 @@ func _rebuild_lanes() -> void:
     _clear_track_cells()
     _lane_views.clear()
 
-    if _lane_groups.is_empty():
+    if not _lane_groups:
         _empty_label.text = empty_message
         _empty_label.show()
         _sync_scroll_content_size()
@@ -336,8 +336,8 @@ func _refresh_details_panel() -> void:
         _details_body_label.text = _format_clip_details(_selected_clip)
     elif _selected_track:
         var track_index := event.tracks.find(_selected_track) if event else -1
-        var track_name := String(_selected_track.track_name)
-        var title_name := track_name if not track_name.is_empty() else "Track %d" % (track_index + 1)
+        var track_name: String = _selected_track.track_name
+        var title_name := track_name if track_name else "Track %d" % (track_index + 1)
         _details_title_label.text = "Track: %s" % title_name
         _details_body_label.text = _format_track_details(_selected_track)
     else:
@@ -358,8 +358,8 @@ func _format_track_details(track: SfxTrack) -> String:
 func _format_clip_details(clip: SfxClip) -> String:
     var track_name := "None"
     if clip.track:
-        var track_label := String(clip.track.track_name)
-        track_name = track_label if not track_label.is_empty() else "Track %d" % (event.tracks.find(clip.track) + 1 if event else 0)
+        var track_label: String = clip.track.track_name
+        track_name = track_label if track_label else "Track %d" % (event.tracks.find(clip.track) + 1 if event else 0)
     var trigger_mode_name := "Timeline" if clip.trigger_mode == SfxClip.TriggerMode.TRIGGER_TIMELINE else "Sustain"
     var lines: Array[String] = [
         "Offset: %.2fs   Length: %.2fs" % [clip.offset, clip.length],
