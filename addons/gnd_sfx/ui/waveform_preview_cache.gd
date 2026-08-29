@@ -6,9 +6,24 @@ const MAX_SAMPLES_PER_BUCKET := 256
 
 static var _preview_cache := {}
 
+## Registry of per-AudioStream-type preview builders, keyed by
+## stream.get_class(). Each entry is a Callable(AudioStream) -> Dictionary
+## (may await). Support another stream type by adding an entry here -
+## no need to touch _build_preview_for_stream().
+static var PREVIEW_BUILDERS := {
+    "AudioStreamGenerator": _generator_preview,
+    "AudioStreamRandomizer": _build_randomizer_preview,
+    "AudioStreamWAV": _build_wav_preview,
+    "AudioStreamOggVorbis": _build_ogg_preview,
+}
+
 
 static func clear_cache() -> void:
     _preview_cache.clear()
+
+
+static func _generator_preview(_stream: AudioStream) -> Dictionary:
+    return _build_empty_preview("GEN")
 
 
 static func get_clip_preview(clip: SfxClip) -> Dictionary:
@@ -45,14 +60,9 @@ static func _get_stream_preview(stream: AudioStream) -> Dictionary:
 static func _build_preview_for_stream(stream: AudioStream) -> Dictionary:
     if not stream:
         return _build_empty_preview()
-    if stream is AudioStreamGenerator:
-        return _build_empty_preview("GEN")
-    if stream is AudioStreamRandomizer:
-        return await _build_randomizer_preview(stream as AudioStreamRandomizer)
-    if stream is AudioStreamWAV:
-        return await _build_wav_preview(stream as AudioStreamWAV)
-    if stream is AudioStreamOggVorbis:
-        return await _build_ogg_preview(stream as AudioStreamOggVorbis)
+    var builder: Callable = PREVIEW_BUILDERS.get(stream.get_class())
+    if builder:
+        return await builder.call(stream)
     return await _build_generic_playback_preview(stream)
 
 

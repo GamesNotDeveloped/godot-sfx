@@ -109,11 +109,11 @@ func _apply_loop_offset(clip: SfxClip, loop_offset: float) -> Dictionary:
     if clip == null or clip.stream == null:
         return {"ok": false, "error": "Clip is missing an AudioStream."}
     var stream: AudioStream = clip.stream
-    if not (stream is AudioStreamOggVorbis or stream is AudioStreamMP3):
+    if not SfxStreamLoopSupport.supports_persisted_loop_offset(stream):
         return {"ok": false, "error": "Stream type does not support loop_offset editing."}
 
-    stream.loop = true
-    stream.loop_offset = loop_offset
+    SfxStreamLoopSupport.set_looping(stream, true)
+    SfxStreamLoopSupport.set_persisted_loop_offset(stream, loop_offset)
 
     var stream_path := stream.resource_path
     if stream_path.is_empty():

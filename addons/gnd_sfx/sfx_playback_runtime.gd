@@ -730,7 +730,7 @@ func _build_clip_stream(clip: SfxClip, automation: SfxAutomation = null) -> Audi
         var stream_copy = clip.stream.duplicate(true)
         return stream_copy as AudioStream if stream_copy else clip.stream
 
-    if automation and not clip.cut and _stream_loops(clip.stream):
+    if automation and not clip.cut and SfxStreamLoopSupport.is_looping(clip.stream):
         var stream_copy = clip.stream.duplicate(true)
         return stream_copy as AudioStream if stream_copy else clip.stream
 
@@ -812,7 +812,7 @@ func _resolve_visual_clip_span(clip: SfxClip, stream: AudioStream, use_clip_leng
 func _wrap_or_clamp_position(position: float, span: float, stream: AudioStream) -> float:
     if span <= 0.0:
         return position
-    if _stream_loops(stream):
+    if SfxStreamLoopSupport.is_looping(stream):
         return fposmod(position, span)
     return clampf(position, 0.0, span)
 
@@ -843,33 +843,8 @@ func _build_visual_clip_state(clip: SfxClip, voice: ActiveVoice, use_clip_length
         "active": true,
         "visible_span": visible_span,
         "position": position,
-        "loops": _stream_loops(voice.stream),
+        "loops": SfxStreamLoopSupport.is_looping(voice.stream),
     }
-
-
-func _stream_loops(stream: AudioStream) -> bool:
-    if not stream:
-        return false
-    if stream is AudioStreamWAV:
-        return not stream.loop_mode == AudioStreamWAV.LOOP_DISABLED
-    if stream is AudioStreamOggVorbis:
-        return stream.loop
-    if stream is AudioStreamMP3:
-        return stream.loop
-    if "loop" in stream:
-        return bool(stream.loop)
-    return false
-
-
-func _disable_stream_loop(stream: AudioStream) -> void:
-    if not stream:
-        return
-    if stream is AudioStreamWAV:
-        stream.loop_mode = AudioStreamWAV.LOOP_DISABLED
-    elif stream is AudioStreamOggVorbis or stream is AudioStreamMP3:
-        stream.loop = false
-    elif "loop" in stream:
-        stream.loop = false
 
 
 func _resolve_tail_start_position(playback_position: float, end_position: float, was_looping: bool) -> float:
@@ -1305,7 +1280,7 @@ func _finish_automation_voice_on_end(voice: ActiveVoice) -> void:
     if not voice or not is_instance_valid(voice.player):
         return
     var playback_position: float = voice.player.get_playback_position()
-    var was_looping := _stream_loops(voice.stream)
+    var was_looping := SfxStreamLoopSupport.is_looping(voice.stream)
     if was_looping and voice.stream == voice.clip.stream:
         var stream := voice.stream.duplicate(true) as AudioStream if voice.stream else null
         if stream:
@@ -1315,7 +1290,7 @@ func _finish_automation_voice_on_end(voice: ActiveVoice) -> void:
     voice.finish_on_end = true
     voice.finish_elapsed = 0.0
     voice.stream_end_position = maxf(voice.stream.get_length(), 0.0) if voice.stream else 0.0
-    _disable_stream_loop(voice.stream)
+    SfxStreamLoopSupport.set_looping(voice.stream, false)
     if voice.stream_end_position > 0.0:
         playback_position = _resolve_tail_start_position(playback_position, voice.stream_end_position, was_looping)
         voice.finish_duration = maxf(voice.stream_end_position - playback_position, 0.0)

@@ -370,9 +370,7 @@ static func _decode_stream_to_mono(stream: AudioStream) -> Dictionary:
 
 
 static func _supports_loop_offset(stream: AudioStream) -> bool:
-    if stream == null:
-        return false
-    return stream.has_method("set_loop") and stream.has_method("set_loop_offset")
+    return SfxStreamLoopSupport.supports_persisted_loop_offset(stream)
 
 
 static func _normalized_dot(lhs: PackedFloat32Array, rhs: PackedFloat32Array) -> float:

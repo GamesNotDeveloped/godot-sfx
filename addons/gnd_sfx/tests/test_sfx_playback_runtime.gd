@@ -239,12 +239,12 @@ func test_automation_track_without_cut_disables_loop_on_voice_copy_only() -> voi
     var clip: SfxClip = fixture["clip"]
     var voice: SfxPlaybackRuntime.ActiveVoice = fixture["voice"]
     var event: SfxEvent = fixture["event"]
-    assert_true(runtime._stream_loops(clip.stream), "Original stream should keep its loop")
+    assert_true(SfxStreamLoopSupport.is_looping(clip.stream), "Original stream should keep its loop")
 
     runtime.modulate(event.name, {"rpm": 650.0})
-    assert_false(runtime._stream_loops(voice.stream), "Draining voice copy should not loop")
+    assert_false(SfxStreamLoopSupport.is_looping(voice.stream), "Draining voice copy should not loop")
     assert_eq(voice.player.stream, voice.stream, "Active player should use the non-looping drain stream")
-    assert_true(runtime._stream_loops(clip.stream), "Disabling drain loop should not mutate the clip stream")
+    assert_true(SfxStreamLoopSupport.is_looping(clip.stream), "Disabling drain loop should not mutate the clip stream")
 
 
 func test_automation_track_without_cut_restarts_same_voice_after_reentry() -> void:
@@ -258,7 +258,7 @@ func test_automation_track_without_cut_restarts_same_voice_after_reentry() -> vo
     assert_eq(runtime._active_voices.size(), 1, "Re-entry should reuse the draining voice")
     assert_eq(runtime._active_voices[0], voice, "Re-entry should not duplicate the automation voice")
     assert_false(voice.finish_on_end, "Re-entry should clear finish-on-end state")
-    assert_true(runtime._stream_loops(voice.stream), "Re-entry should restore the loop-capable stream copy")
+    assert_true(SfxStreamLoopSupport.is_looping(voice.stream), "Re-entry should restore the loop-capable stream copy")
 
 
 func test_automation_track_without_cut_wraps_loop_position_before_tail() -> void:
