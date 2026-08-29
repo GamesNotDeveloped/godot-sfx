@@ -70,7 +70,7 @@ static func supports_persisted_loop_offset(stream: AudioStream) -> bool:
     if not stream:
         return false
     var handler = HANDLERS.get(stream.get_class())
-    return handler != null and handler.SUPPORTS_PERSISTED_OFFSET
+    return handler and handler.SUPPORTS_PERSISTED_OFFSET
 
 
 static func set_persisted_loop_offset(stream: AudioStream, offset: float) -> bool:

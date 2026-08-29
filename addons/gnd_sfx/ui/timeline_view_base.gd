@@ -227,7 +227,7 @@ func _hide_global_cursors() -> void:
 
 
 func _get_curve_duration(curve: Curve) -> float:
-    if curve == null:
+    if not curve:
         return 0.0
     return maxf(curve.max_domain - curve.min_domain, 0.0)
 

@@ -21,7 +21,7 @@ func _ready() -> void:
 
 
 func _on_event_requested(event: SfxEvent) -> void:
-    if event == null:
+    if not event:
         return
 
     var viewer = EventViewerScene.instantiate()

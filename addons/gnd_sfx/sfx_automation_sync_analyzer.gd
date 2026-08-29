@@ -27,7 +27,7 @@ static func analyze_automation(automation: SfxAutomation) -> Dictionary:
     var warnings: PackedStringArray = []
 
     for clip in automation.clips:
-        if clip == null or clip.stream == null:
+        if not clip or not clip.stream:
             continue
 
         var decoded := _decode_stream_to_mono(clip.stream)
@@ -346,11 +346,11 @@ static func estimate_loop_offset(
 
 
 static func _decode_stream_to_mono(stream: AudioStream) -> Dictionary:
-    if stream == null or stream.get_length() <= 0.0:
+    if not stream or stream.get_length() <= 0.0:
         return {}
 
     var playback := stream.instantiate_playback()
-    if playback == null:
+    if not playback:
         return {}
 
     var sample_rate := AudioServer.get_mix_rate()

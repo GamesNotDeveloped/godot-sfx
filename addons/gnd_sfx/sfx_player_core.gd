@@ -174,9 +174,9 @@ func build_playback_effect_hint() -> String:
 
     var options := PackedStringArray([PLAYBACK_NONE_OPTION])
     for event in bank.events:
-        if not event or String(event.name).is_empty():
+        if not event or not event.name:
             continue
-        options.append(String(event.name))
+        options.append(event.name)
     return ",".join(options)
 
 
@@ -187,22 +187,22 @@ func build_playback_automation_hint() -> String:
         return ",".join(options)
 
     for automation in event.automations:
-        if not automation or String(automation.parameter_name).is_empty():
+        if not automation or not automation.parameter_name:
             continue
-        options.append(String(automation.parameter_name))
+        options.append(automation.parameter_name)
     return ",".join(options)
 
 
 func sanitize_playback_selection() -> void:
     var event := _find_playback_event()
     var effect: StringName = _owner.playback_effect
-    if not String(effect).is_empty() and not event:
+    if effect and not event:
         _owner.playback_effect = &""
         _owner.playback_automation = &""
         return
 
     var automation_name: StringName = _owner.playback_automation
-    if String(automation_name).is_empty() or not event:
+    if not automation_name or not event:
         return
 
     for automation in event.automations:
@@ -265,7 +265,7 @@ func _sync_editor_playback() -> void:
     if not config_changed and not value_changed:
         return
 
-    if not enabled or String(effect).is_empty():
+    if not enabled or not effect:
         if _preview_enabled and _preview_effect:
             stop(_preview_effect)
         else:
@@ -275,12 +275,12 @@ func _sync_editor_playback() -> void:
 
     if config_changed:
         _runtime.clear()
-        var preview_parameters := {} if String(automation).is_empty() else {automation: automation_value}
+        var preview_parameters := {} if not automation else {automation: automation_value}
         play(effect, 0.0, preview_parameters)
         _store_preview_state()
         return
 
-    if value_changed and not String(automation).is_empty():
+    if value_changed and automation:
         modulate(effect, {automation: automation_value})
         _store_preview_state()
 

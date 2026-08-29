@@ -54,7 +54,7 @@ func resolve_waveform_window(clip: SfxClip, preview_duration: float, clip_start:
 
 func build_fade_overlay_lines(clip: SfxClip, clipped_start: float, clipped_end: float, bar_size: Vector2, sampler: Callable) -> Array[Dictionary]:
     var lines: Array[Dictionary] = []
-    if clip == null or bar_size.x <= 1.0 or bar_size.y <= 1.0:
+    if not clip or bar_size.x <= 1.0 or bar_size.y <= 1.0:
         return lines
     if clip.fade_in_curve:
         var fade_in_points := build_curve_overlay_points(clip.fade_in_curve, clipped_start, clipped_end, bar_size, false, sampler)
@@ -69,7 +69,7 @@ func build_fade_overlay_lines(clip: SfxClip, clipped_start: float, clipped_end: 
 
 func build_curve_overlay_points(curve: Curve, clipped_start: float, clipped_end: float, bar_size: Vector2, fade_out: bool, sampler: Callable) -> PackedVector2Array:
     var points := PackedVector2Array()
-    if curve == null or clipped_end <= clipped_start:
+    if not curve or clipped_end <= clipped_start:
         return points
     var sample_count := clampi(int(round(bar_size.x / 5.0)), 12, 64)
     points.resize(sample_count)

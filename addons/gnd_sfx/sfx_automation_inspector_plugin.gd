@@ -11,7 +11,7 @@ func _can_handle(object: Object) -> bool:
 
 func _parse_begin(object: Object) -> void:
     var automation := object as SfxAutomation
-    if automation == null:
+    if not automation:
         return
 
     var container := VBoxContainer.new()
@@ -42,7 +42,7 @@ func _parse_begin(object: Object) -> void:
 
 
 func _on_sync_confirmation_requested(confirmation: ConfirmationDialog) -> void:
-    if confirmation == null:
+    if not confirmation:
         return
     confirmation.popup_centered()
 
@@ -106,7 +106,7 @@ func _count_stream_clips(automation: SfxAutomation) -> int:
 
 
 func _apply_loop_offset(clip: SfxClip, loop_offset: float) -> Dictionary:
-    if clip == null or clip.stream == null:
+    if not clip or not clip.stream:
         return {"ok": false, "error": "Clip is missing an AudioStream."}
     var stream: AudioStream = clip.stream
     if not SfxStreamLoopSupport.supports_persisted_loop_offset(stream):
@@ -149,7 +149,7 @@ func _save_automation_owner(automation: SfxAutomation) -> Dictionary:
         return {"ok": false, "error": "Auto-save currently supports .tres/.res owners only; save the resource manually."}
 
     var owner_resource := ResourceLoader.load(owner_path, "", ResourceLoader.CACHE_MODE_REUSE)
-    if owner_resource == null:
+    if not owner_resource:
         return {"ok": false, "error": "Could not reload %s for saving." % owner_path}
 
     var save_error := ResourceSaver.save(owner_resource, owner_path)
@@ -163,7 +163,7 @@ func _reimport_streams(stream_paths: PackedStringArray) -> void:
         return
 
     var filesystem := EditorInterface.get_resource_filesystem()
-    if filesystem == null:
+    if not filesystem:
         return
     filesystem.reimport_files(stream_paths)
 

@@ -262,7 +262,7 @@ func _resolve_clip_end(clip: SfxClip) -> float:
 
 
 func _sample_clip_curve(clip: SfxClip, curve: Curve, axis_value: float, _clip_start: float, _clip_end: float, fade_out: bool) -> float:
-    if curve == null:
+    if not curve:
         return 1.0
     if not fade_out:
         return clampf(_sample_automation_curve(curve, clip, axis_value), 0.0, 1.0)
@@ -270,14 +270,14 @@ func _sample_clip_curve(clip: SfxClip, curve: Curve, axis_value: float, _clip_st
 
 
 func _sample_automation_curve(curve: Curve, clip: SfxClip, value: float) -> float:
-    if curve == null:
+    if not curve:
         return 1.0
     var local_value := clampf(value - clip.offset, curve.min_domain, curve.max_domain)
     return curve.sample(local_value)
 
 
 func _sample_automation_fade_out_curve(curve: Curve, clip: SfxClip, value: float) -> float:
-    if curve == null:
+    if not curve:
         return 1.0
     if clip.length > 0.0:
         var duration := _get_curve_duration(curve)

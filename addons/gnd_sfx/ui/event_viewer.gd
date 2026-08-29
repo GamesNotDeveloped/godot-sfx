@@ -67,14 +67,14 @@ func _show_tabs_loading_state() -> void:
         child.queue_free()
     _tracks_timeline = null
     _automation_timelines.clear()
-    _empty_tabs_label.text = "No event selected" if event == null else "Loading previews..."
+    _empty_tabs_label.text = "No event selected" if not event else "Loading previews..."
     _empty_tabs_label.show()
 
 
 func _resolve_event_title() -> String:
-    if event == null or String(event.name).is_empty():
+    if not event or not event.name:
         return "Event Viewer"
-    return "Event Viewer: %s" % String(event.name)
+    return "Event Viewer: %s" % event.name
 
 
 func _reset_parameter_values() -> void:
@@ -82,10 +82,10 @@ func _reset_parameter_values() -> void:
     _parameter_snapshot_seeded = false
     _manual_time_cursor_value = 0.0
     _manual_time_cursor_visible = false
-    if event == null:
+    if not event:
         return
     for automation in event.automations:
-        if automation == null or String(automation.parameter_name).is_empty():
+        if not automation or not automation.parameter_name:
             continue
         _parameter_values[automation.parameter_name] = automation.min_domain
 
@@ -93,7 +93,7 @@ func _reset_parameter_values() -> void:
 func _seed_parameter_values_from_runtime_snapshot() -> void:
     if _parameter_snapshot_seeded:
         return
-    if player == null or event == null or String(event.name).is_empty():
+    if not player or not event or not event.name:
         return
     _parameter_snapshot_seeded = true
     var visualization_state: Dictionary = player.get_event_visualization_state(event.name)
@@ -103,7 +103,7 @@ func _seed_parameter_values_from_runtime_snapshot() -> void:
     if not (parameters is Dictionary):
         return
     for automation in event.automations:
-        if automation == null or String(automation.parameter_name).is_empty():
+        if not automation or not automation.parameter_name:
             continue
         if parameters.has(automation.parameter_name):
             _parameter_values[automation.parameter_name] = float(parameters[automation.parameter_name])
@@ -117,14 +117,14 @@ func _rebuild_parameter_controls() -> void:
 
     _no_params_label.hide()
 
-    if event == null or event.automations.is_empty():
+    if not event or event.automations.is_empty():
         _no_params_label.text = "No automations"
         _no_params_label.show()
         return
 
     var has_parameter := false
     for automation in event.automations:
-        if automation == null or String(automation.parameter_name).is_empty():
+        if not automation or not automation.parameter_name:
             continue
         has_parameter = true
         _build_parameter_editor(automation)
@@ -141,7 +141,7 @@ func _build_parameter_editor(automation: SfxAutomation) -> Control:
     var slider := panel.slider
     var spinbox := panel.spinbox
 
-    panel.title_label.text = String(automation.parameter_name)
+    panel.title_label.text = automation.parameter_name
     slider.min_value = automation.min_domain
     slider.max_value = maxf(automation.max_domain, automation.min_domain + 0.001)
     slider.step = maxf((slider.max_value - slider.min_value) / 200.0, 0.001)
@@ -175,7 +175,7 @@ func _on_parameter_control_changed(value: float, parameter_name: StringName, sli
 
 
 func _rebuild_tabs() -> void:
-    if event == null:
+    if not event:
         _empty_tabs_label.text = "No event selected"
         _empty_tabs_label.show()
         return
@@ -184,11 +184,9 @@ func _rebuild_tabs() -> void:
     _add_tracks_tab("Tracks", event)
 
     for automation in event.automations:
-        if automation == null:
+        if not automation:
             continue
-        var tab_title := String(automation.parameter_name)
-        if tab_title.is_empty():
-            tab_title = "Automation"
+        var tab_title := "Automation" if not automation.parameter_name else String(automation.parameter_name)
         _add_automation_tab(tab_title, event, automation)
     _sync_automation_cursors()
 
@@ -239,7 +237,7 @@ func _sync_automation_cursors() -> void:
 
 
 func _process(_delta: float) -> void:
-    if _tracks_timeline == null or player == null or event == null or String(event.name).is_empty():
+    if not _tracks_timeline or not player or not event or not event.name:
         return
     var visualization_state: Dictionary = player.get_event_visualization_state(event.name)
     _tracks_timeline.apply_time_visualization(visualization_state)
@@ -278,19 +276,19 @@ func _format_playback_time(seconds: float) -> String:
 
 
 func _on_play_pressed() -> void:
-    if player == null or event == null or String(event.name).is_empty():
+    if not player or not event or not event.name:
         return
     player.play(event.name, _parameter_values.duplicate(true))
 
 
 func _on_stop_pressed() -> void:
-    if player == null or event == null or String(event.name).is_empty():
+    if not player or not event or not event.name:
         return
     player.stop(event.name)
 
 
 func _on_stop_immediate_pressed() -> void:
-    if player == null or event == null or String(event.name).is_empty():
+    if not player or not event or not event.name:
         return
     player.stop(event.name, true)
 
@@ -316,7 +314,7 @@ func _apply_parameter_value(parameter_name: StringName, value: float, propagate_
             spinbox.value = value
             spinbox.step = spinbox_step
         _suppress_parameter_control_updates = false
-    if propagate_runtime and player and event and not String(event.name).is_empty():
+    if propagate_runtime and player and event and event.name:
         player.modulate(event.name, {parameter_name: value})
 
 
@@ -327,12 +325,12 @@ func _on_timeline_axis_value_selected(value: float, timeline: TimelineView) -> v
     _manual_time_cursor_visible = true
     _tracks_timeline.set_time_cursor(_manual_time_cursor_value, true)
     _current_time_label.text = _format_playback_time(_manual_time_cursor_value)
-    if player and event and not String(event.name).is_empty() and player.is_playing(event.name):
+    if player and event and event.name and player.is_playing(event.name):
         player.seek(event.name, _manual_time_cursor_value)
 
 
 func _on_automation_axis_value_selected(value: float, timeline) -> void:
-    if timeline == null:
+    if not timeline:
         return
     for automation_key in _automation_timelines.keys():
         if _automation_timelines[automation_key] == timeline:

@@ -459,14 +459,14 @@ func _resolve_clip_end(clip: SfxClip) -> float:
 
 
 func _resolve_clip_stream_length(clip: SfxClip) -> float:
-    if clip.stream == null:
+    if not clip.stream:
         return 0.0
     var stream_length := maxf(clip.stream.get_length(), 0.0) - maxf(clip.stream_offset, 0.0)
     return maxf(stream_length, 0.0)
 
 
 func _sample_clip_curve(curve: Curve, axis_value: float, clip_start: float, clip_end: float, fade_out: bool) -> float:
-    if curve == null:
+    if not curve:
         return 1.0
     var local_time := maxf(axis_value - clip_start, 0.0)
     if not fade_out:
@@ -476,14 +476,14 @@ func _sample_clip_curve(curve: Curve, axis_value: float, clip_start: float, clip
 
 
 func _sample_time_curve(curve: Curve, local_time: float) -> float:
-    if curve == null:
+    if not curve:
         return 1.0
     var sample_position := clampf(local_time, curve.min_domain, curve.max_domain)
     return curve.sample(sample_position)
 
 
 func _sample_time_fade_out_curve(curve: Curve, remaining: float) -> float:
-    if curve == null:
+    if not curve:
         return 1.0
     var duration := _get_curve_duration(curve)
     if duration <= 0.0:

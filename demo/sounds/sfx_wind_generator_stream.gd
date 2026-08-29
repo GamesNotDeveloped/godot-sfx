@@ -28,7 +28,7 @@ const OUTPUT_HEADROOM := 0.22
 
 
 func create_state(playback: AudioStreamGeneratorPlayback, clip: SfxClip):
-    if playback == null:
+    if not playback:
         return null
 
     var runtime := RuntimeState.new()
@@ -42,7 +42,7 @@ func create_state(playback: AudioStreamGeneratorPlayback, clip: SfxClip):
 
 func update(state, context: Dictionary) -> void:
     var runtime := state as RuntimeState
-    if runtime == null or runtime.playback == null:
+    if not runtime or not runtime.playback:
         return
 
     var speed := maxf(float(context.get("automation_value", 0.0)), 0.0)
@@ -103,7 +103,7 @@ func _fill_buffer(runtime: RuntimeState, speed: float) -> void:
 
 
 func _sample_speed_curve(curve: Curve, speed: float, default_value: float) -> float:
-    if curve == null:
+    if not curve:
         return default_value
 
     var input_min := minf(curve.min_domain, curve.max_domain)

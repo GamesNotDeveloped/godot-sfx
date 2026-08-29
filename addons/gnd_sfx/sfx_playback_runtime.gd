@@ -311,7 +311,7 @@ func get_event_visualization_state(event_name: StringName) -> Dictionary:
 
     var automation_clip_states := {}
     for automation in instance.event.automations:
-        if not automation or String(automation.parameter_name).is_empty():
+        if not automation or not automation.parameter_name:
             continue
         var automation_states := {}
         for clip in automation.clips:
@@ -390,7 +390,7 @@ func _refresh_automation_clips(instance: EventInstance) -> void:
             continue
 
         var automation_name := automation.parameter_name
-        if String(automation_name).is_empty():
+        if not automation_name:
             continue
 
         var current_value := float(instance.parameters.get(automation_name, automation.min_domain))
@@ -1209,7 +1209,7 @@ func _instance_has_pending_play_activity(instance: EventInstance) -> bool:
         if not automation:
             continue
         var automation_name := automation.parameter_name
-        if String(automation_name).is_empty():
+        if not automation_name:
             continue
         var triggered_clips: Array = instance.triggered_automation_clips.get(automation_name, [])
         for clip in automation.clips:
