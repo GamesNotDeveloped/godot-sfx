@@ -26,3 +26,7 @@ Simple Sound Effects System for Godot inspired by FMOD
 * Multiple samples per track
 * Automation of Audio Bus and it's effects
 * Standalone Sound Effect Maker (similar to Material Maker, inspired by FMOD)
+
+## Credits
+
+The demo project's sound effects are sourced from [Freesound.org](https://freesound.org) under various Creative Commons licenses - see [demo/sounds/assets/CREDITS.md](demo/sounds/assets/CREDITS.md) for per-file attribution.
