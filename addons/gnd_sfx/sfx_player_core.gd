@@ -190,6 +190,10 @@ func build_playback_automation_hint() -> String:
         if not automation or not automation.parameter_name:
             continue
         options.append(automation.parameter_name)
+    for modulation in event.parameter_modulations:
+        if not modulation or not modulation.parameter_name or options.has(modulation.parameter_name):
+            continue
+        options.append(modulation.parameter_name)
     return ",".join(options)
 
 
@@ -207,6 +211,9 @@ func sanitize_playback_selection() -> void:
 
     for automation in event.automations:
         if automation and automation.parameter_name == automation_name:
+            return
+    for modulation in event.parameter_modulations:
+        if modulation and modulation.parameter_name == automation_name:
             return
     _owner.playback_automation = &""
 

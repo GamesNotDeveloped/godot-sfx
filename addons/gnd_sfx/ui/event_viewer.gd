@@ -90,10 +90,10 @@ func _reset_parameter_values() -> void:
     _manual_time_cursor_visible = false
     if not event:
         return
-    for automation in event.automations:
-        if not automation or not automation.parameter_name:
+    for definition:Resource in _parameter_definitions():
+        if not definition or not definition.parameter_name:
             continue
-        _parameter_values[automation.parameter_name] = automation.min_domain
+        _parameter_values[definition.parameter_name] = definition.min_domain
 
 
 func _seed_parameter_values_from_runtime_snapshot() -> void:
@@ -108,11 +108,11 @@ func _seed_parameter_values_from_runtime_snapshot() -> void:
     var parameters = visualization_state.get("parameters", {})
     if not (parameters is Dictionary):
         return
-    for automation in event.automations:
-        if not automation or not automation.parameter_name:
+    for definition:Resource in _parameter_definitions():
+        if not definition or not definition.parameter_name:
             continue
-        if parameters.has(automation.parameter_name):
-            _parameter_values[automation.parameter_name] = float(parameters[automation.parameter_name])
+        if parameters.has(definition.parameter_name):
+            _parameter_values[definition.parameter_name] = float(parameters[definition.parameter_name])
 
 
 func _rebuild_parameter_controls() -> void:
@@ -123,17 +123,17 @@ func _rebuild_parameter_controls() -> void:
 
     _no_params_label.hide()
 
-    if not event or not event.automations:
+    if not event or not _parameter_definitions():
         _no_params_label.text = "No automations"
         _no_params_label.show()
         return
 
     var has_parameter := false
-    for automation in event.automations:
-        if not automation or not automation.parameter_name:
+    for definition:Resource in _parameter_definitions():
+        if not definition or not definition.parameter_name:
             continue
         has_parameter = true
-        _build_parameter_editor(automation)
+        _build_parameter_editor(definition)
 
     if not has_parameter:
         _no_params_label.text = "No named automation parameters"
@@ -141,7 +141,7 @@ func _rebuild_parameter_controls() -> void:
     _sync_automation_cursors()
 
 
-func _build_parameter_editor(automation: SfxAutomation) -> Control:
+func _build_parameter_editor(automation: Resource) -> Control:
     var panel: ParameterEditor = ParameterEditorScene.instantiate()
     _params_container.add_child(panel)
     var slider := panel.slider
@@ -165,6 +165,22 @@ func _build_parameter_editor(automation: SfxAutomation) -> Control:
     }
 
     return panel
+
+
+func _parameter_definitions() -> Array[Resource]:
+    var definitions:Array[Resource] = []
+    var names:Dictionary = {}
+    if not event:
+        return definitions
+    for automation:SfxAutomation in event.automations:
+        if automation and automation.parameter_name and not names.has(automation.parameter_name):
+            definitions.append(automation)
+            names[automation.parameter_name] = true
+    for modulation:SfxParameterModulation in event.parameter_modulations:
+        if modulation and modulation.parameter_name and not names.has(modulation.parameter_name):
+            definitions.append(modulation)
+            names[modulation.parameter_name] = true
+    return definitions
 
 
 func _on_parameter_control_changed(value: float, parameter_name: StringName, slider: HSlider, spinbox: SpinBox, from_slider: bool) -> void:

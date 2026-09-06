@@ -65,6 +65,16 @@ class_name SfxEvent
         automations = value
         emit_changed()
 
+@export var parameter_modulations: Array[SfxParameterModulation] = []:
+    set(value):
+        parameter_modulations = value
+        emit_changed()
+
+@export var spatial_config: SfxSpatialConfig:
+    set(value):
+        spatial_config = value
+        emit_changed()
+
 
 static func _make_master_track() -> SfxTrack:
     var track := SfxTrack.new()

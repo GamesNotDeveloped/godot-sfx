@@ -137,6 +137,7 @@ class ActiveVoice:
     var track_adsr := AdsrEnvelope.new()
     var automation_current_gain := 1.0
     var automation_release_gain := 1.0
+    var spatial_defaults: Dictionary = {}
 
 
 signal finished
@@ -287,7 +288,7 @@ func modulate(event_name: StringName, parameters: Dictionary) -> void:
 
     _refresh_automation_clips(instance)
     for voice in _active_voices:
-        if voice.event_instance == instance and voice.automation:
+        if voice.event_instance == instance:
             _apply_voice_state(voice)
     _notify_process_requirement_changed()
 
@@ -1037,6 +1038,7 @@ func _start_voice(instance: EventInstance, clip: SfxClip, automation: SfxAutomat
     voice.player_token = player_token
     voice.creation_order = _voice_creation_counter
     _voice_creation_counter += 1
+    _apply_spatial_config(voice)
     _enter_track_attack(voice)
 
     if stream is AudioStreamGenerator and not _setup_generator_voice(voice, player, clip):
@@ -1122,9 +1124,69 @@ func _apply_voice_state(voice: ActiveVoice) -> void:
             clip_gain *= clampf(_sample_time_fade_out_curve(voice.clip.fade_out_curve, remaining_clip_time), 0.0, 1.0)
         pitch = _sample_curve_gain(voice.clip.pitch_curve, local_clip_time)
 
+    var parameter_gain := 1.0
+    var parameter_pitch := 1.0
+    var parameter_unit_size := 1.0
+    for modulation in voice.event_instance.event.parameter_modulations:
+        if not modulation or not modulation.parameter_name:
+            continue
+        var value := float(voice.event_instance.parameters.get(modulation.parameter_name, modulation.default_value))
+        var result := value
+        if modulation.curve:
+            result = modulation.curve.sample(clampf(value, modulation.min_domain, modulation.max_domain))
+        match modulation.target:
+            SfxParameterModulation.Target.GAIN:
+                parameter_gain *= maxf(result, 0.0)
+            SfxParameterModulation.Target.PITCH:
+                parameter_pitch *= maxf(result, 0.01)
+            SfxParameterModulation.Target.UNIT_SIZE:
+                parameter_unit_size *= maxf(result, 0.01)
+
     var mixer_gain := _resolve_track_mixer_gain(voice)
-    _set_player_gain(voice.player, clampf(_current_adsr_gain(voice.event_instance), 0.0, 1.0) * clampf(_current_track_adsr_gain(voice), 0.0, 1.0) * clip_gain * mixer_gain)
-    voice.player.pitch_scale = maxf(pitch, 0.01)
+    _set_player_gain(voice.player, clampf(_current_adsr_gain(voice.event_instance), 0.0, 1.0) * clampf(_current_track_adsr_gain(voice), 0.0, 1.0) * clip_gain * mixer_gain * parameter_gain)
+    voice.player.pitch_scale = maxf(pitch * parameter_pitch, 0.01)
+    if voice.player is AudioStreamPlayer3D and voice.event_instance.event.spatial_config:
+        var player := voice.player as AudioStreamPlayer3D
+        var spatial_config := voice.event_instance.event.spatial_config
+        player.position = spatial_config.position
+        player.attenuation_model = spatial_config.attenuation_model
+        player.unit_size = spatial_config.unit_size * parameter_unit_size
+        if spatial_config.max_distance >= 0.0:
+            player.max_distance = spatial_config.max_distance
+        player.panning_strength = spatial_config.panning_strength
+
+
+func _apply_spatial_config(voice: ActiveVoice) -> void:
+    if not voice.player is AudioStreamPlayer3D:
+        return
+    var player := voice.player as AudioStreamPlayer3D
+    voice.spatial_defaults = {
+        "position": player.position,
+        "attenuation_model": player.attenuation_model,
+        "unit_size": player.unit_size,
+        "max_distance": player.max_distance,
+        "panning_strength": player.panning_strength,
+    }
+    var config := voice.event_instance.event.spatial_config
+    if not config:
+        return
+    player.position = config.position
+    player.attenuation_model = config.attenuation_model
+    player.unit_size = config.unit_size
+    if config.max_distance >= 0.0:
+        player.max_distance = config.max_distance
+    player.panning_strength = config.panning_strength
+
+
+func _restore_spatial_config(voice: ActiveVoice) -> void:
+    if not voice.player is AudioStreamPlayer3D or not voice.spatial_defaults:
+        return
+    var player := voice.player as AudioStreamPlayer3D
+    player.position = voice.spatial_defaults["position"]
+    player.attenuation_model = voice.spatial_defaults["attenuation_model"]
+    player.unit_size = voice.spatial_defaults["unit_size"]
+    player.max_distance = voice.spatial_defaults["max_distance"]
+    player.panning_strength = voice.spatial_defaults["panning_strength"]
 
 
 func _cleanup_voice(voice: ActiveVoice) -> void:
@@ -1145,6 +1207,7 @@ func _release_voice(index: int) -> void:
     var voice := _active_voices[index]
     _cleanup_voice(voice)
     if _voice_owns_player(voice):
+        _restore_spatial_config(voice)
         voice.player.volume_db = 0.0
         voice.player.pitch_scale = 1.0
     _active_voices.remove_at(index)
