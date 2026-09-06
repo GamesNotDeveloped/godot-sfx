@@ -507,11 +507,11 @@ func _refresh_automation_clips(instance: EventInstance) -> void:
             var active_now := _automation_clip_contains_value(automation, clip, current_value)
             var triggered := triggered_clips.has(clip)
             if active_now:
-                if not voice or _automation_voice_is_releasing(voice):
-                    if _start_voice(instance, clip, automation) and not triggered:
+                if not triggered:
+                    if voice and not _automation_voice_is_releasing(voice):
                         triggered_clips.append(clip)
-                elif not triggered:
-                    triggered_clips.append(clip)
+                    elif _start_voice(instance, clip, automation):
+                        triggered_clips.append(clip)
                 continue
 
             if triggered:
