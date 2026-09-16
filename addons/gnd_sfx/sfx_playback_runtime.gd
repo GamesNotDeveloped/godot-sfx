@@ -283,8 +283,14 @@ func modulate(event_name: StringName, parameters: Dictionary) -> void:
     if not instance:
         return
 
+    # Skip the refresh entirely when nothing changed - callers commonly poll every tick.
+    var changed := false
     for key in parameters.keys():
-        instance.parameters[key] = parameters[key]
+        if not instance.parameters.get(key) == parameters[key]:
+            instance.parameters[key] = parameters[key]
+            changed = true
+    if not changed:
+        return
 
     _refresh_automation_clips(instance)
     for voice in _active_voices:
