@@ -138,6 +138,11 @@ class ActiveVoice:
     var automation_current_gain := 1.0
     var automation_release_gain := 1.0
     var spatial_defaults: Dictionary = {}
+    var last_gain_db:float = INF
+    var last_pitch_scale:float = INF
+    var last_spatial_position:Vector3 = Vector3(INF, INF, INF)
+    var last_spatial_unit_size:float = INF
+    var spatial_state_applied:bool = false
 
 
 signal finished
@@ -1158,17 +1163,35 @@ func _apply_voice_state(voice: ActiveVoice) -> void:
                 parameter_unit_size *= maxf(result, 0.01)
 
     var mixer_gain := _resolve_track_mixer_gain(voice)
-    _set_player_gain(voice.player, clampf(_current_adsr_gain(voice.event_instance), 0.0, 1.0) * clampf(_current_track_adsr_gain(voice), 0.0, 1.0) * clip_gain * mixer_gain * parameter_gain)
-    voice.player.pitch_scale = maxf(pitch * parameter_pitch, 0.01)
+    var gain_db:float = linear_to_db(maxf(
+            clampf(_current_adsr_gain(voice.event_instance), 0.0, 1.0)
+            * clampf(_current_track_adsr_gain(voice), 0.0, 1.0)
+            * clip_gain * mixer_gain * parameter_gain,
+            0.0001))
+    if not is_equal_approx(gain_db, voice.last_gain_db):
+        voice.last_gain_db = gain_db
+        voice.player.volume_db = gain_db
+    var pitch_scale:float = maxf(pitch * parameter_pitch, 0.01)
+    if not is_equal_approx(pitch_scale, voice.last_pitch_scale):
+        voice.last_pitch_scale = pitch_scale
+        voice.player.pitch_scale = pitch_scale
     if voice.player is AudioStreamPlayer3D and voice.event_instance.event.spatial_config:
         var player := voice.player as AudioStreamPlayer3D
         var spatial_config := voice.event_instance.event.spatial_config
-        player.position = spatial_config.position
-        player.attenuation_model = spatial_config.attenuation_model
-        player.unit_size = spatial_config.unit_size * parameter_unit_size
+        var spatial_unit_size:float = spatial_config.unit_size * parameter_unit_size
+        if not voice.spatial_state_applied or not player.position == spatial_config.position:
+            player.position = spatial_config.position
+        if not voice.spatial_state_applied or not player.attenuation_model == spatial_config.attenuation_model:
+            player.attenuation_model = spatial_config.attenuation_model
+        if not voice.spatial_state_applied or not is_equal_approx(voice.last_spatial_unit_size, spatial_unit_size):
+            player.unit_size = spatial_unit_size
+            voice.last_spatial_unit_size = spatial_unit_size
         if spatial_config.max_distance >= 0.0:
-            player.max_distance = spatial_config.max_distance
-        player.panning_strength = spatial_config.panning_strength
+            if not voice.spatial_state_applied or not is_equal_approx(player.max_distance, spatial_config.max_distance):
+                player.max_distance = spatial_config.max_distance
+        if not voice.spatial_state_applied or not is_equal_approx(player.panning_strength, spatial_config.panning_strength):
+            player.panning_strength = spatial_config.panning_strength
+        voice.spatial_state_applied = true
 
 
 func _apply_spatial_config(voice: ActiveVoice) -> void:

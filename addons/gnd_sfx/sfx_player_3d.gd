@@ -5,7 +5,6 @@ class_name SfxPlayer3D
 signal finished
 
 const HARD_CUT_DISTANCE_SETTING:StringName = &"gnd_sfx/hard_cut_distance"
-const HARD_CUT_CHECK_INTERVAL_SETTING:StringName = &"gnd_sfx/hard_cut_check_interval"
 
 var _core := SfxPlayerCore.new(
     self,
@@ -19,7 +18,6 @@ var _core := SfxPlayerCore.new(
 )
 
 var _hard_cut:bool = false
-var _hard_cut_timer:Timer
 
 @export var bank: SfxBank:
     set(value):
@@ -89,20 +87,29 @@ func _enter_tree() -> void:
 
 
 func _ready() -> void:
-    _hard_cut_timer = Timer.new()
-    _hard_cut_timer.wait_time = float(ProjectSettings.get_setting(
-            HARD_CUT_CHECK_INTERVAL_SETTING, 5.0))
-    _hard_cut_timer.timeout.connect(_update_hard_cut)
-    add_child(_hard_cut_timer)
-    _hard_cut_timer.start()
+    if Engine.is_editor_hint():
+        _core.activate()
+        return
+    hard_cut_check()
+    GndSfxSystem.register_player(self)
     _core.activate()
 
 
 func _exit_tree() -> void:
+    if not Engine.is_editor_hint():
+        GndSfxSystem.unregister_player(self)
     _core.deactivate()
 
 
-func _process(delta: float) -> void:
+func advance(delta:float) -> void:
+    _core.advance(delta)
+
+
+func requires_process() -> bool:
+    return not _hard_cut and _core.requires_process()
+
+
+func _process(delta:float) -> void:
     _core.advance(delta)
 
 
@@ -115,14 +122,15 @@ func sync_values(rebuild := false) -> void:
 
 
 func play(event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {}) -> void:
-    _update_hard_cut()
+    hard_cut_check()
     if _hard_cut:
         return
     _core.play(event_name, offset_or_parameters, parameters)
 
 
-func _update_hard_cut() -> void:
-    var camera:Camera3D = get_viewport().get_camera_3d() if is_inside_tree() else null
+func hard_cut_check(camera:Camera3D = null) -> void:
+    if not camera and is_inside_tree():
+        camera = get_viewport().get_camera_3d()
     if not camera:
         _hard_cut = false
         return

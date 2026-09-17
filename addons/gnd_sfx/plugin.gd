@@ -18,6 +18,14 @@ func _enter_tree() -> void:
     add_inspector_plugin(_automation_inspector_plugin)
 
 
+func _enable_plugin() -> void:
+    add_autoload_singleton("GndSfxSystem", "res://addons/gnd_sfx/gnd_sfx_system.gd")
+
+
+func _disable_plugin() -> void:
+    remove_autoload_singleton("GndSfxSystem")
+
+
 func _exit_tree() -> void:
     if _automation_inspector_plugin:
         remove_inspector_plugin(_automation_inspector_plugin)

@@ -63,6 +63,11 @@ func advance(delta: float) -> void:
     _runtime.update(delta)
 
 
+func requires_process() -> bool:
+    return _runtime.requires_process()
+
+
+
 func events_changed() -> void:
     _disconnect_playback_resource_watchers()
     _connect_playback_resource_watchers()
