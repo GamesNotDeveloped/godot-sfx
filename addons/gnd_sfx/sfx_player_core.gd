@@ -38,6 +38,7 @@ func _init(owner, make_player: Callable, configure_player: Callable) -> void:
     _owner = owner
     _make_player = make_player
     _configure_player = configure_player
+    _runtime.set_player_factory(_request_player)
 
 
 func initialize() -> void:
@@ -74,6 +75,11 @@ func apply_player_config() -> void:
         _configure_player.call(player)
 
 
+func clear() -> void:
+    _runtime.clear()
+    _update_process_state()
+
+
 func sync_values(rebuild := false) -> void:
     _ensure_runtime_connections()
     if rebuild:
@@ -83,19 +89,22 @@ func sync_values(rebuild := false) -> void:
                 _owner.remove_child(player)
                 player.queue_free()
         _players = []
-        var index := 0
-        var max_tracks: int = _owner.max_tracks
-        while index < max_tracks:
-            var player: Node = _make_player.call()
-            _players.append(player)
-            _owner.add_child(player)
-            player.finished.connect(_on_player_finished.bind(player))
-            index += 1
         _runtime.set_players(_players)
 
     apply_player_config()
     _sync_editor_playback()
     _update_process_state()
+
+
+func _request_player():
+    if _players.size() >= _owner.max_tracks:
+        return null
+    var player: Node = _make_player.call()
+    _configure_player.call(player)
+    _players.append(player)
+    _owner.add_child(player)
+    player.finished.connect(_on_player_finished.bind(player))
+    return player
 
 
 func play(event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {}) -> void:

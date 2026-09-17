@@ -15,7 +15,7 @@ var _core := SfxPlayerCore.new(
         bank = value
         _core.events_changed()
 
-@export var max_tracks: int = 10:
+@export var max_tracks: int = 4:
     set(value):
         max_tracks = value
         _core.sync_values(true)

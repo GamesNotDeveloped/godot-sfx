@@ -144,6 +144,7 @@ signal finished
 signal process_requirement_changed(required: bool)
 
 var _players: Array = []
+var _player_factory: Callable
 var _active_voices: Array[ActiveVoice] = []
 var _instances: Dictionary = {}
 var _player_tokens := {}
@@ -157,6 +158,10 @@ var _voice_creation_counter := 0
 func set_players(players: Array) -> void:
     _players = players
     _notify_process_requirement_changed()
+
+
+func set_player_factory(factory: Callable) -> void:
+    _player_factory = factory
 
 
 ## Immediately stops every voice and forgets every instance, with no
@@ -708,6 +713,10 @@ func _has_instance(instance: EventInstance) -> bool:
 func _get_available_player():
     for player in _players:
         if _find_active_voice_index(player) == -1:
+            return player
+    if _player_factory:
+        var player = _player_factory.call()
+        if player:
             return player
     return null
 

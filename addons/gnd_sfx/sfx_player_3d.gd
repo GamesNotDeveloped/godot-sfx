@@ -4,6 +4,9 @@ class_name SfxPlayer3D
 
 signal finished
 
+const HARD_CUT_DISTANCE_SETTING:StringName = &"gnd_sfx/hard_cut_distance"
+const HARD_CUT_CHECK_INTERVAL_SETTING:StringName = &"gnd_sfx/hard_cut_check_interval"
+
 var _core := SfxPlayerCore.new(
     self,
     func(): return AudioStreamPlayer3D.new(),
@@ -15,12 +18,15 @@ var _core := SfxPlayerCore.new(
         player.unit_size = unit_size
 )
 
+var _hard_cut:bool = false
+var _hard_cut_timer:Timer
+
 @export var bank: SfxBank:
     set(value):
         bank = value
         _core.events_changed()
 
-@export var max_tracks: int = 10:
+@export var max_tracks: int = 4:
     set(value):
         max_tracks = value
         _core.sync_values(true)
@@ -83,6 +89,12 @@ func _enter_tree() -> void:
 
 
 func _ready() -> void:
+    _hard_cut_timer = Timer.new()
+    _hard_cut_timer.wait_time = float(ProjectSettings.get_setting(
+            HARD_CUT_CHECK_INTERVAL_SETTING, 5.0))
+    _hard_cut_timer.timeout.connect(_update_hard_cut)
+    add_child(_hard_cut_timer)
+    _hard_cut_timer.start()
     _core.activate()
 
 
@@ -103,7 +115,23 @@ func sync_values(rebuild := false) -> void:
 
 
 func play(event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {}) -> void:
+    _update_hard_cut()
+    if _hard_cut:
+        return
     _core.play(event_name, offset_or_parameters, parameters)
+
+
+func _update_hard_cut() -> void:
+    var camera:Camera3D = get_viewport().get_camera_3d() if is_inside_tree() else null
+    if not camera:
+        _hard_cut = false
+        return
+    var distance:float = global_position.distance_to(camera.global_position)
+    var limit:float = float(ProjectSettings.get_setting(HARD_CUT_DISTANCE_SETTING, 1000.0))
+    var hard_cut:bool = distance > limit
+    if hard_cut and not _hard_cut:
+        _core.clear()
+    _hard_cut = hard_cut
 
 
 func seek(event_name: StringName, offset: float) -> void:
