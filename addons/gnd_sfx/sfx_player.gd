@@ -7,7 +7,9 @@ signal finished
 var _core := SfxPlayerCore.new(
     self,
     func(): return AudioStreamPlayer.new(),
-    func(player): player.max_polyphony = max_polyphony
+    func(player):
+        player.max_polyphony = max_polyphony
+        player.bus = bus
 )
 
 @export var bank: SfxBank:
@@ -23,6 +25,12 @@ var _core := SfxPlayerCore.new(
 @export var max_polyphony: int = 1:
     set(value):
         max_polyphony = value
+        _core.apply_player_config()
+
+## Audio bus of every voice this player creates.
+@export var bus: StringName = &"Master":
+    set(value):
+        bus = value
         _core.apply_player_config()
 
 @export_group("Playback", "playback")

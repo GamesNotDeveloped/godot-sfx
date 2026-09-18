@@ -15,6 +15,7 @@ var _core := SfxPlayerCore.new(
         player.panning_strength = panning_strength
         player.attenuation_model = attenuation_model
         player.unit_size = unit_size
+        player.bus = bus
 )
 
 var _hard_cut:bool = false
@@ -47,6 +48,12 @@ var _hard_cut:bool = false
 @export var max_polyphony: int = 1:
     set(value):
         max_polyphony = value
+        _core.apply_player_config()
+
+## Audio bus of every voice this player creates.
+@export var bus: StringName = &"Master":
+    set(value):
+        bus = value
         _core.apply_player_config()
 
 @export_range(0.0, 3.0) var panning_strength: float = 1.0:
