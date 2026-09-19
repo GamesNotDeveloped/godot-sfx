@@ -1021,6 +1021,41 @@ func test_track_solo_does_not_affect_other_events() -> void:
         assert_almost_eq(db_to_linear(voice.player.volume_db), 1.0, 0.01, "Solo in one event should not silence voices belonging to a different event")
 
 
+## Repro: AudioStreamPlayer3D clamps attenuation + volume_db to max_db (audio_stream_player_3d.cpp,
+## _get_attenuation_db), and next to the listener the attenuation is about +100 dB - a clip muted
+## through volume_db alone came out at max_db, as loud as the audible one.
+func test_muted_automation_clip_stays_silent_on_3d_player_at_listener() -> void:
+    var local_runtime := SfxPlaybackRuntime.new()
+    var local_players: Array = []
+    for _i in range(2):
+        var player := AudioStreamPlayer3D.new()
+        local_players.append(player)
+        add_child_autoqfree(player)
+    local_runtime.set_players(local_players)
+
+    var clip_on := _make_clip(0.0)
+    clip_on.fade_out_curve = _make_linear_curve(0.476, 0.502, 0.0, 1.0)
+    var clip_off := _make_clip(0.0)
+    clip_off.fade_in_curve = _make_linear_curve(0.502, 0.507, 0.0, 1.0)
+    var automation := SfxAutomation.new()
+    automation.parameter_name = &"toggle"
+    automation.clips = [clip_on, clip_off]
+    var event := SfxEvent.new()
+    event.name = &"switch"
+    event.automations = [automation]
+
+    local_runtime.play(event, 0.0, {"toggle": 1.0})
+    var listener_attenuation_db := linear_to_db(1.0 / 0.00001)
+    for voice in local_runtime._active_voices:
+        var player := voice.player as AudioStreamPlayer3D
+        var effective_db := minf(listener_attenuation_db + player.volume_db, player.max_db)
+        if voice.clip == clip_on:
+            assert_lt(effective_db, -60.0, "Muted clip must stay silent at the listener")
+        else:
+            assert_almost_eq(effective_db, 3.0, 0.001, "Audible clip keeps the player's max_db")
+    local_runtime.clear()
+
+
 func _make_clip(offset: float, duration_seconds := 0.5) -> SfxClip:
     var clip := SfxClip.new()
     clip.stream = _make_test_wav(duration_seconds)

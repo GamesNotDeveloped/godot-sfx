@@ -150,6 +150,8 @@ signal process_requirement_changed(required: bool)
 
 var _players: Array = []
 var _player_factory: Callable
+## max_db of each 3D player before the runtime used it (see _apply_player_gain)
+var _player_base_max_db: Dictionary = {}
 var _active_voices: Array[ActiveVoice] = []
 var _instances: Dictionary = {}
 var _player_tokens := {}
@@ -1170,7 +1172,7 @@ func _apply_voice_state(voice: ActiveVoice) -> void:
             0.0001))
     if not is_equal_approx(gain_db, voice.last_gain_db):
         voice.last_gain_db = gain_db
-        voice.player.volume_db = gain_db
+        _apply_player_gain(voice.player, gain_db)
     var pitch_scale:float = maxf(pitch * parameter_pitch, 0.01)
     if not is_equal_approx(pitch_scale, voice.last_pitch_scale):
         voice.last_pitch_scale = pitch_scale
@@ -1246,7 +1248,7 @@ func _release_voice(index: int) -> void:
     _cleanup_voice(voice)
     if _voice_owns_player(voice):
         _restore_spatial_config(voice)
-        voice.player.volume_db = 0.0
+        _apply_player_gain(voice.player, 0.0)
         voice.player.pitch_scale = 1.0
     _active_voices.remove_at(index)
 
@@ -1265,12 +1267,24 @@ func _stop_voice(index: int) -> void:
         _reset_player(voice.player, true)
 
 
+## AudioStreamPlayer3D clamps attenuation + volume_db to max_db (audio_stream_player_3d.cpp,
+## _get_attenuation_db), and close to the listener the attenuation reaches about +100 dB - a gain
+## applied through volume_db alone is then clamped away (a muted clip plays at max_db). Shifting
+## max_db by the same gain makes it act after the clamp: min(att + g, max + g) = min(att, max) + g.
+func _apply_player_gain(player, gain_db: float) -> void:
+    player.volume_db = gain_db
+    if player is AudioStreamPlayer3D:
+        if not _player_base_max_db.has(player):
+            _player_base_max_db[player] = player.max_db
+        player.max_db = _player_base_max_db[player] + gain_db
+
+
 func _reset_player(player, clear_stream := false) -> void:
     if not is_instance_valid(player):
         return
     player.stop()
     player.pitch_scale = 1.0
-    player.volume_db = 0.0
+    _apply_player_gain(player, 0.0)
     if clear_stream:
         player.stream = null
 
