@@ -12,6 +12,7 @@ Simple Sound Effects System for Godot inspired by FMOD
 * Fade-in and fade-out curves
 * Routing tracks to audio buses
 * Uses built-in AudioStreams
+* Playback ticked on a worker thread, with the player nodes as proxies (`GndSfxServer`)
 * Native implementation for Godot
 * Open source
 

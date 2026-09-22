@@ -3,33 +3,27 @@ extends GutTest
 const SILENCE_GAIN_TOLERANCE := 0.00011
 
 var runtime: SfxPlaybackRuntime
-var players: Array = []
 
 
 func before_each() -> void:
     runtime = SfxPlaybackRuntime.new()
-    players = []
-    for _i in range(4):
-        var player := AudioStreamPlayer.new()
-        players.append(player)
-        add_child_autoqfree(player)
-    runtime.set_players(players)
+    runtime.set_slot_capacity(4)
 
 
 func after_each() -> void:
     runtime.clear()
-    players.clear()
 
 
-func _make_local_runtime(player_count: int) -> SfxPlaybackRuntime:
+func _make_local_runtime(slot_count: int) -> SfxPlaybackRuntime:
     var local_runtime := SfxPlaybackRuntime.new()
-    var local_players: Array = []
-    for _i in range(player_count):
-        var player := AudioStreamPlayer.new()
-        local_players.append(player)
-        add_child_autoqfree(player)
-    local_runtime.set_players(local_players)
+    local_runtime.set_slot_capacity(slot_count)
     return local_runtime
+
+
+## What SfxPlayerCore does when the node behind a slot reports it finished
+func _finish_slot(slot: SfxVoiceSlot) -> void:
+    slot.playing = false
+    runtime.handle_slot_finished(slot)
 
 
 func test_time_offset_track_starts_only_after_threshold() -> void:
@@ -127,6 +121,7 @@ func test_automation_tracks_start_after_parameter_threshold_crossing() -> void:
     assert_eq(runtime._active_voices.size(), 0, "Automation clip should not start below offset threshold")
 
     runtime.modulate(event.name, {"rpm": 750.0})
+    runtime.update(0.0)
     assert_eq(runtime._active_voices.size(), 1, "Automation clip should start after threshold crossing")
 
 
@@ -143,6 +138,7 @@ func test_automation_track_stops_after_parameter_leaves_track_range() -> void:
     assert_eq(runtime._active_voices.size(), 1, "Automation clip should start while the parameter is inside its range")
 
     runtime.modulate(event.name, {"rpm": 650.0})
+    runtime.update(0.0)
     assert_eq(runtime._active_voices.size(), 0, "Automation clip should stop once the parameter leaves offset + length")
 
 
@@ -163,6 +159,7 @@ func test_automation_track_uses_track_adsr_release_after_leaving_range() -> void
     assert_eq(runtime._active_voices.size(), 1)
 
     runtime.modulate(event.name, {"rpm": 650.0})
+    runtime.update(0.0)
     assert_eq(runtime._active_voices.size(), 1, "Track ADSR release should keep the automation voice alive briefly")
     assert_eq(runtime._active_voices[0].track_adsr.stage, SfxPlaybackRuntime.AdsrStage.RELEASE, "Leaving range should begin track ADSR release")
 
@@ -190,10 +187,12 @@ func test_automation_track_retriggers_after_reentering_range() -> void:
     runtime.update(0.2)
 
     runtime.modulate(event.name, {"rpm": 650.0})
+    runtime.update(0.0)
     assert_eq(runtime._active_voices.size(), 1)
     assert_eq(voice.track_adsr.stage, SfxPlaybackRuntime.AdsrStage.RELEASE, "Leaving range should release the existing voice")
 
     runtime.modulate(event.name, {"rpm": 550.0})
+    runtime.update(0.0)
     assert_eq(runtime._active_voices.size(), 1, "Re-entering range should reuse the releasing voice instead of duplicating it")
     assert_eq(runtime._active_voices[0], voice, "Re-entry should restart the existing releasing voice")
     assert_eq(voice.track_adsr.stage, SfxPlaybackRuntime.AdsrStage.ATTACK, "Re-entry should restart track ADSR")
@@ -212,12 +211,12 @@ func test_automation_track_without_cut_finishes_sample_after_leaving_range() -> 
     var voice: SfxPlaybackRuntime.ActiveVoice = runtime._active_voices[0]
 
     runtime.modulate(event.name, {"rpm": 650.0})
+    runtime.update(0.0)
     assert_eq(runtime._active_voices.size(), 1, "Non-cut automation voice should stay alive after leaving range")
     assert_true(voice.finish_on_end, "Non-cut automation voice should finish at sample end")
     assert_eq(voice.track_adsr.stage, SfxPlaybackRuntime.AdsrStage.SUSTAIN, "Non-cut automation voice should not enter track ADSR release")
 
-    voice.player.stop()
-    runtime.handle_player_finished(voice.player)
+    _finish_slot(voice.slot)
     assert_eq(runtime._active_voices.size(), 0, "Non-cut automation voice should disappear after the sample finishes")
 
 
@@ -244,8 +243,9 @@ func test_automation_track_without_cut_disables_loop_on_voice_copy_only() -> voi
     assert_true(SfxStreamLoopSupport.is_looping(clip.stream), "Original stream should keep its loop")
 
     runtime.modulate(event.name, {"rpm": 650.0})
+    runtime.update(0.0)
     assert_false(SfxStreamLoopSupport.is_looping(voice.stream), "Draining voice copy should not loop")
-    assert_eq(voice.player.stream, voice.stream, "Active player should use the non-looping drain stream")
+    assert_eq(voice.slot.stream, voice.stream, "Active voice slot should use the non-looping drain stream")
     assert_true(SfxStreamLoopSupport.is_looping(clip.stream), "Disabling drain loop should not mutate the clip stream")
 
 
@@ -254,9 +254,11 @@ func test_automation_track_without_cut_restarts_same_voice_after_reentry() -> vo
     var voice: SfxPlaybackRuntime.ActiveVoice = fixture["voice"]
     var event: SfxEvent = fixture["event"]
     runtime.modulate(event.name, {"rpm": 650.0})
+    runtime.update(0.0)
     assert_true(voice.finish_on_end)
 
     runtime.modulate(event.name, {"rpm": 550.0})
+    runtime.update(0.0)
     assert_eq(runtime._active_voices.size(), 1, "Re-entry should reuse the draining voice")
     assert_eq(runtime._active_voices[0], voice, "Re-entry should not duplicate the automation voice")
     assert_false(voice.finish_on_end, "Re-entry should clear finish-on-end state")
@@ -509,9 +511,7 @@ func test_one_shot_event_finishes_after_last_voice_ends() -> void:
     assert_true(runtime.is_playing(event.name))
     assert_eq(runtime._active_voices.size(), 1)
 
-    var player: AudioStreamPlayer = runtime._active_voices[0].player
-    player.stop()
-    runtime.handle_player_finished(player)
+    _finish_slot(runtime._active_voices[0].slot)
     runtime.update(0.01)
 
     assert_false(runtime.is_playing(event.name), "Event instance should disappear after its last one-shot voice ends naturally")
@@ -529,9 +529,7 @@ func test_automation_one_shot_event_finishes_after_triggered_voice_ends() -> voi
     assert_true(runtime.is_playing(event.name))
     assert_eq(runtime._active_voices.size(), 1)
 
-    var player: AudioStreamPlayer = runtime._active_voices[0].player
-    player.stop()
-    runtime.handle_player_finished(player)
+    _finish_slot(runtime._active_voices[0].slot)
     runtime.update(0.01)
 
     assert_false(runtime.is_playing(event.name), "Automation one-shot event should disappear after all triggered voices end naturally")
@@ -625,8 +623,7 @@ func test_stop_without_adsr_keeps_instance_alive_until_sustain_track_finishes() 
     assert_true(runtime._instances.has(event.name), "Non-immediate stop without ADSR should keep the instance alive for sustain playback")
     assert_eq(runtime._active_voices.size(), 1, "Sustain clip should still start without ADSR")
 
-    runtime._players[0].stop()
-    runtime.handle_player_finished(runtime._players[0])
+    _finish_slot(runtime.get_slots()[0])
     runtime.update(0.0)
 
     assert_false(runtime._instances.has(event.name), "Instance should be removed after sustain playback ends")
@@ -668,7 +665,7 @@ func _run_stop_without_adsr_release_scenario(event_name: StringName, configure_t
 
     runtime.update(0.1)
     var fading_voice := runtime._find_voice(runtime._get_latest_instance(event.name), timeline_track)
-    var mid_gain := db_to_linear(fading_voice.player.volume_db) if fading_voice else -1.0
+    var mid_gain := db_to_linear(fading_voice.slot.volume_db) if fading_voice else -1.0
 
     runtime.update(0.11)
     var voice_after_release := runtime._find_voice(runtime._get_latest_instance(event.name), timeline_track)
@@ -751,7 +748,7 @@ func test_horn_like_overlap_stop_starts_sustain_track() -> void:
 
     var sustain_voice := local_runtime._find_voice(local_runtime._get_latest_instance(event.name), sustain_track)
     assert_not_null(sustain_voice, "Horn-like sustain clip should start during overlap stop")
-    assert_true(sustain_voice.player.playing, "Sustain voice should still be playing after overlapping voices are stopped")
+    assert_true(sustain_voice.slot.playing, "Sustain voice should still be playing after overlapping voices are stopped")
 
 
 func test_new_voice_steals_oldest_releasing_voice_before_delaying_start() -> void:
@@ -993,7 +990,7 @@ func test_track_solo_silences_other_tracks_within_event() -> void:
 
     assert_eq(runtime._active_voices.size(), 3)
     for voice in runtime._active_voices:
-        var gain := db_to_linear(voice.player.volume_db)
+        var gain := db_to_linear(voice.slot.volume_db)
         if voice.clip == soloed_clip:
             assert_almost_eq(gain, 1.0, 0.01, "Soloed track's clip should remain audible")
         else:
@@ -1018,21 +1015,14 @@ func test_track_solo_does_not_affect_other_events() -> void:
     runtime.play(other_event)
 
     for voice in runtime._active_voices:
-        assert_almost_eq(db_to_linear(voice.player.volume_db), 1.0, 0.01, "Solo in one event should not silence voices belonging to a different event")
+        assert_almost_eq(db_to_linear(voice.slot.volume_db), 1.0, 0.01, "Solo in one event should not silence voices belonging to a different event")
 
 
 ## Repro: AudioStreamPlayer3D clamps attenuation + volume_db to max_db (audio_stream_player_3d.cpp,
 ## _get_attenuation_db), and next to the listener the attenuation is about +100 dB - a clip muted
-## through volume_db alone came out at max_db, as loud as the audible one.
+## through volume_db alone came out at max_db, as loud as the audible one. The shift now happens
+## where the gain reaches the node, in SfxPlayerCore.flush(), so this goes through a real player.
 func test_muted_automation_clip_stays_silent_on_3d_player_at_listener() -> void:
-    var local_runtime := SfxPlaybackRuntime.new()
-    var local_players: Array = []
-    for _i in range(2):
-        var player := AudioStreamPlayer3D.new()
-        local_players.append(player)
-        add_child_autoqfree(player)
-    local_runtime.set_players(local_players)
-
     var clip_on := _make_clip(0.0)
     clip_on.fade_out_curve = _make_linear_curve(0.476, 0.502, 0.0, 1.0)
     var clip_off := _make_clip(0.0)
@@ -1044,16 +1034,35 @@ func test_muted_automation_clip_stays_silent_on_3d_player_at_listener() -> void:
     event.name = &"switch"
     event.automations = [automation]
 
-    local_runtime.play(event, 0.0, {"toggle": 1.0})
+    var events: Array[SfxEvent] = [event]
+    var bank := SfxBank.new()
+    bank.events = events
+
+    var player := SfxPlayer3D.new()
+    player.max_tracks = 2
+    player.bank = bank
+    add_child_autoqfree(player)
+    player.play(event.name, {"toggle": 1.0})
+    await get_tree().process_frame
+    await get_tree().process_frame
+
+    var voices: Array[AudioStreamPlayer3D] = []
+    for child in player.get_children():
+        if child is AudioStreamPlayer3D:
+            voices.append(child)
+    assert_eq(voices.size(), 2, "Both automation clips should have a voice of their own")
+
     var listener_attenuation_db := linear_to_db(1.0 / 0.00001)
-    for voice in local_runtime._active_voices:
-        var player := voice.player as AudioStreamPlayer3D
-        var effective_db := minf(listener_attenuation_db + player.volume_db, player.max_db)
-        if voice.clip == clip_on:
-            assert_lt(effective_db, -60.0, "Muted clip must stay silent at the listener")
-        else:
-            assert_almost_eq(effective_db, 3.0, 0.001, "Audible clip keeps the player's max_db")
-    local_runtime.clear()
+    var silent_voices := 0
+    var audible_voices := 0
+    for voice_player in voices:
+        var effective_db := minf(listener_attenuation_db + voice_player.volume_db, voice_player.max_db)
+        if effective_db < -60.0:
+            silent_voices += 1
+        elif is_equal_approx(effective_db, 3.0):
+            audible_voices += 1
+    assert_eq(silent_voices, 1, "The muted clip must stay silent at the listener")
+    assert_eq(audible_voices, 1, "The audible clip keeps the player's max_db")
 
 
 func _make_clip(offset: float, duration_seconds := 0.5) -> SfxClip:
@@ -1110,7 +1119,7 @@ func _make_constant_curve(value: float) -> Curve:
 
 
 func _player_linear_gain(index: int) -> float:
-    return db_to_linear(runtime._players[index].volume_db)
+    return db_to_linear(runtime.get_slots()[index].volume_db)
 
 
 func _sum_player_linear_gain(indices: Array[int]) -> float:

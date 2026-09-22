@@ -6,6 +6,13 @@ extends RefCounted
 ## instead of inherited because the two owners extend different Node types
 ## (Node vs Node3D) and GDScript has no multiple inheritance.
 ##
+## This is the main-thread half of a player: it owns the pool of
+## AudioStreamPlayer(3D) nodes and is the only code that touches them. The
+## playback engine itself (SfxPlaybackRuntime) runs on GndSfxServer's worker
+## thread and only ever writes SfxVoiceSlots, which flush() copies into the
+## nodes and observe() reads back. In the editor there is no server and no
+## worker: the owning node's _process calls tick_preview() instead.
+##
 ## `_owner` is deliberately untyped (Variant, not Node) so member access
 ## resolves dynamically at runtime. This is not a formal interface -
 ## GDScript has none - but the owner is expected to implement:
@@ -21,11 +28,15 @@ extends RefCounted
 
 const PLAYBACK_NONE_OPTION := "<none>"
 
+## True while GndSfxServer visits this core every frame; the server owns it
+var ticking: bool = false
+
 var _owner
 var _make_player: Callable
 var _configure_player: Callable
 var _runtime := SfxPlaybackRuntime.new()
-var _players: Array = []
+## Audio nodes, indexed like the runtime's voice slots
+var _nodes: Array = []
 var _watched_events: Array[SfxEvent] = []
 var _watched_automations: Array[SfxAutomation] = []
 var _preview_enabled: bool = false
@@ -38,7 +49,6 @@ func _init(owner, make_player: Callable, configure_player: Callable) -> void:
     _owner = owner
     _make_player = make_player
     _configure_player = configure_player
-    _runtime.set_player_factory(_request_player)
 
 
 func initialize() -> void:
@@ -49,18 +59,104 @@ func initialize() -> void:
 
 
 func activate() -> void:
-    _ensure_runtime_connections()
     _connect_playback_resource_watchers()
     sync_values(true)
-    _update_process_state()
 
 
 func deactivate() -> void:
     _disconnect_playback_resource_watchers()
+    if not Engine.is_editor_hint():
+        GndSfxServer.unregister_core(self)
 
 
-func advance(delta: float) -> void:
+## One step of the playback engine. Called by GndSfxServer on its worker thread,
+## so nothing below it may touch a node.
+func tick(delta: float) -> void:
     _runtime.update(delta)
+
+
+## Editor preview: one whole frame in place, with no server and no worker.
+func tick_preview(delta: float) -> void:
+    _runtime.update(delta)
+    flush()
+    observe()
+    _owner.set_process(_runtime.requires_process())
+
+
+## Copies what the last tick decided into the audio nodes. Main thread only.
+func flush() -> void:
+    var slots: Array[SfxVoiceSlot] = _runtime.get_slots()
+    for index in range(slots.size()):
+        var slot: SfxVoiceSlot = slots[index]
+        if slot.dirty == 0 and slot.play_serial == slot.applied_play_serial:
+            continue
+
+        var player = _nodes[index] if index < _nodes.size() else null
+        if not player:
+            # A slot that only ever asked to stop never had a node to stop
+            if slot.play_serial == slot.applied_play_serial:
+                slot.dirty = 0
+                continue
+            player = _make_player.call()
+            _configure_player.call(player)
+            while _nodes.size() <= index:
+                _nodes.append(null)
+            _nodes[index] = player
+            _owner.add_child(player)
+            player.finished.connect(_on_player_finished.bind(player))
+            if player is AudioStreamPlayer3D:
+                slot.base_max_db = player.max_db
+
+        if slot.dirty & SfxVoiceSlot.Dirty.STREAM:
+            player.stream = slot.stream
+        if slot.dirty & SfxVoiceSlot.Dirty.GAIN:
+            # AudioStreamPlayer3D clamps attenuation + volume_db to max_db
+            # (audio_stream_player_3d.cpp, _get_attenuation_db), and close to the listener the
+            # attenuation reaches about +100 dB - a gain applied through volume_db alone is then
+            # clamped away (a muted clip plays at max_db). Shifting max_db by the same gain makes
+            # it act after the clamp: min(att + g, max + g) = min(att, max) + g.
+            player.volume_db = slot.volume_db
+            if player is AudioStreamPlayer3D:
+                player.max_db = slot.base_max_db + slot.volume_db
+        if slot.dirty & SfxVoiceSlot.Dirty.PITCH:
+            player.pitch_scale = slot.pitch_scale
+        if slot.dirty & SfxVoiceSlot.Dirty.SPATIAL and player is AudioStreamPlayer3D:
+            if slot.spatial_override:
+                player.position = slot.spatial_position
+                player.attenuation_model = slot.spatial_attenuation_model
+                player.unit_size = slot.spatial_unit_size
+                player.panning_strength = slot.spatial_panning_strength
+                if slot.spatial_max_distance >= 0.0:
+                    player.max_distance = slot.spatial_max_distance
+            else:
+                player.position = Vector3.ZERO
+                _configure_player.call(player)
+
+        if slot.play_serial > slot.applied_play_serial:
+            slot.applied_play_serial = slot.play_serial
+            player.play(slot.start_position)
+            if slot.wants_generator:
+                slot.generator_stream_playback = (
+                        player.get_stream_playback() as AudioStreamGeneratorPlayback)
+        elif slot.transport == SfxVoiceSlot.Transport.STOP and player.playing:
+            player.stop()
+        slot.dirty = 0
+
+    if _runtime.consume_finished():
+        _owner.emit_signal(&"finished")
+
+
+## Reads back what the audio nodes are doing, for the next tick to work from.
+## Main thread only.
+func observe() -> void:
+    var slots: Array[SfxVoiceSlot] = _runtime.get_slots()
+    for index in range(mini(slots.size(), _nodes.size())):
+        var player = _nodes[index]
+        if not player:
+            continue
+        var slot: SfxVoiceSlot = slots[index]
+        slot.playing = player.playing
+        slot.playback_position = player.get_playback_position()
 
 
 func requires_process() -> bool:
@@ -76,40 +172,38 @@ func events_changed() -> void:
 
 
 func apply_player_config() -> void:
-    for player in _players:
-        _configure_player.call(player)
+    for player in _nodes:
+        if is_instance_valid(player):
+            _configure_player.call(player)
 
 
 func clear() -> void:
     _runtime.clear()
-    _update_process_state()
+    _request_tick()
 
 
 func sync_values(rebuild := false) -> void:
-    _ensure_runtime_connections()
     if rebuild:
         _runtime.clear()
-        for player in _players:
+        for player in _nodes:
             if is_instance_valid(player):
                 _owner.remove_child(player)
                 player.queue_free()
-        _players = []
-        _runtime.set_players(_players)
+        _nodes = []
+        _runtime.release_slots()
 
+    _runtime.set_slot_capacity(_owner.max_tracks)
     apply_player_config()
     _sync_editor_playback()
-    _update_process_state()
 
 
-func _request_player():
-    if _players.size() >= _owner.max_tracks:
-        return null
-    var player: Node = _make_player.call()
-    _configure_player.call(player)
-    _players.append(player)
-    _owner.add_child(player)
-    player.finished.connect(_on_player_finished.bind(player))
-    return player
+## There is work for the next tick: in game the server starts visiting this
+## core again, in the editor the owning node's own _process does the ticking.
+func _request_tick() -> void:
+    if Engine.is_editor_hint():
+        _owner.set_process(true)
+        return
+    GndSfxServer.activate_core(self)
 
 
 func play(event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {}) -> void:
@@ -126,22 +220,27 @@ func play(event_name: StringName, offset_or_parameters = null, parameters: Dicti
     var event := bank.get_event(event_name)
     if event:
         _runtime.play(event, offset, parameters)
+        _request_tick()
 
 
 func seek(event_name: StringName, offset: float) -> void:
     _runtime.seek(event_name, offset)
+    _request_tick()
 
 
 func modulate(event_name: StringName, parameters: Dictionary) -> void:
     _runtime.modulate(event_name, parameters)
+    _request_tick()
 
 
 func set_parameters(parameters: Dictionary) -> void:
     _runtime.set_parameters(parameters)
+    _request_tick()
 
 
 func stop(event_name_or_immediate = null, immediate: bool = false) -> void:
     _runtime.stop(event_name_or_immediate, immediate)
+    _request_tick()
 
 
 func is_playing(event_name: StringName) -> bool:
@@ -160,6 +259,7 @@ func play_automation(event_name: StringName, automation_name: StringName, value:
     var event := bank.get_event(event_name)
     if event:
         _runtime.play_automation(event, automation_name, value, restart)
+        _request_tick()
 
 
 func stop_automation(event_name: StringName, automation_name: StringName, immediate: bool = false) -> void:
@@ -170,6 +270,7 @@ func stop_automation(event_name: StringName, automation_name: StringName, immedi
     var event := bank.get_event(event_name)
     if event:
         _runtime.stop_automation(event, automation_name, immediate)
+        _request_tick()
 
 
 func validate_property(property: Dictionary) -> void:
@@ -245,26 +346,20 @@ func notify_playback_property_list_changed() -> void:
         _owner.notify_property_list_changed()
 
 
-func _ensure_runtime_connections() -> void:
-    if not _runtime.process_requirement_changed.is_connected(_on_runtime_process_requirement_changed):
-        _runtime.process_requirement_changed.connect(_on_runtime_process_requirement_changed)
-    if not _runtime.finished.is_connected(_on_runtime_finished):
-        _runtime.finished.connect(_on_runtime_finished)
-
-
-func _on_runtime_process_requirement_changed(required: bool) -> void:
-    if Engine.is_editor_hint():
-        _update_process_state()
-        return
-    _owner.set_process(required)
-
-
-func _on_runtime_finished() -> void:
-    _owner.emit_signal(&"finished")
-
-
+## A node reached the end of its stream on its own. A node this runtime stopped
+## deliberately is already off the active list, and Godot emits `finished` for
+## those too, hence the playing check.
 func _on_player_finished(player) -> void:
-    _runtime.handle_player_finished(player)
+    if player.playing:
+        return
+    var index := _nodes.find(player)
+    var slots: Array[SfxVoiceSlot] = _runtime.get_slots()
+    if index == -1 or index >= slots.size():
+        return
+    var slot: SfxVoiceSlot = slots[index]
+    slot.playing = false
+    _runtime.handle_slot_finished(slot)
+    _request_tick()
 
 
 func _sync_editor_playback() -> void:
@@ -318,11 +413,6 @@ func _reset_preview_state() -> void:
     _preview_effect = &""
     _preview_automation = &""
     _preview_automation_value = 0.0
-
-
-func _update_process_state() -> void:
-    if Engine.is_editor_hint():
-        _owner.set_process(_runtime.requires_process())
 
 
 func _connect_playback_resource_watchers() -> void:

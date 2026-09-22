@@ -19,11 +19,11 @@ func _enter_tree() -> void:
 
 
 func _enable_plugin() -> void:
-    add_autoload_singleton("GndSfxSystem", "res://addons/gnd_sfx/gnd_sfx_system.gd")
+    add_autoload_singleton("GndSfxServer", "res://addons/gnd_sfx/gnd_sfx_server.gd")
 
 
 func _disable_plugin() -> void:
-    remove_autoload_singleton("GndSfxSystem")
+    remove_autoload_singleton("GndSfxServer")
 
 
 func _exit_tree() -> void:

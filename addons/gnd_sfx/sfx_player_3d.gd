@@ -97,27 +97,21 @@ func _ready() -> void:
     if Engine.is_editor_hint():
         _core.activate()
         return
+    set_process(false)
     hard_cut_check()
-    GndSfxSystem.register_player(self)
+    GndSfxServer.register_player(self)
     _core.activate()
 
 
 func _exit_tree() -> void:
     if not Engine.is_editor_hint():
-        GndSfxSystem.unregister_player(self)
+        GndSfxServer.unregister_player(self)
     _core.deactivate()
 
 
-func advance(delta:float) -> void:
-    _core.advance(delta)
-
-
-func requires_process() -> bool:
-    return not _hard_cut and _core.requires_process()
-
-
+## Editor preview only - in game GndSfxServer ticks the core off the main thread
 func _process(delta:float) -> void:
-    _core.advance(delta)
+    _core.tick_preview(delta)
 
 
 func _validate_property(property: Dictionary) -> void:

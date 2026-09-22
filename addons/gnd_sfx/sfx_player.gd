@@ -66,6 +66,7 @@ func _enter_tree() -> void:
 
 
 func _ready() -> void:
+    set_process(Engine.is_editor_hint())
     _core.activate()
 
 
@@ -73,8 +74,9 @@ func _exit_tree() -> void:
     _core.deactivate()
 
 
+## Editor preview only - in game GndSfxServer ticks the core off the main thread
 func _process(delta: float) -> void:
-    _core.advance(delta)
+    _core.tick_preview(delta)
 
 
 func _validate_property(property: Dictionary) -> void:
