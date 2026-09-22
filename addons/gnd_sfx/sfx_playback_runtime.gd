@@ -392,9 +392,11 @@ func stop_automation(event: SfxEvent, _automation_name: StringName, immediate: b
 
 ## True if `event_name` has at least one active instance, including one
 ## that's still releasing (fading out / in ADSR release) after a
-## non-immediate stop.
+## non-immediate stop. Answered from the instance table directly -
+## _remove_instance() drops the key with its last instance, and callers poll
+## this per event per frame, so it must not build an array to look at.
 func is_playing(event_name: StringName) -> bool:
-    return not _get_instances_for_event(event_name).is_empty()
+    return _instances.has(event_name)
 
 
 ## Snapshot of the latest instance's state for UI display (TimelineView/
