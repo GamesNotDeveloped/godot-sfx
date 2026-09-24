@@ -87,8 +87,12 @@ func sync_values(rebuild := false) -> void:
     _core.sync_values(rebuild)
 
 
-func play(event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {}) -> void:
-    _core.play(event_name, offset_or_parameters, parameters)
+## `start_fraction` shifts every voice of this event that far into its own clip - what holds one
+## recording played by many emitters out of phase with itself (see SfxPlaybackRuntime).
+func play(
+        event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {},
+        start_fraction := 0.0) -> void:
+    _core.play(event_name, offset_or_parameters, parameters, start_fraction)
 
 
 func seek(event_name: StringName, offset: float) -> void:

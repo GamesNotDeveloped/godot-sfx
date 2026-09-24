@@ -101,6 +101,11 @@ class EventInstance:
     var event: SfxEvent
     var event_name: StringName = &""
     var playback_time := 0.0
+    ## How far into its own stream every voice of this instance starts, as a fraction of that
+    ## stream. Set once, at play(), and kept apart from playback_time because that one advances:
+    ## an emitter that has to stay out of phase with its neighbours needs the shift on each voice
+    ## it starts, not only on the first one, and a clip swapped in later is a different length.
+    var start_fraction := 0.0
     var release_time := 0.0
     var parameters: Dictionary = {}
     var status: PlaybackStatus = PlaybackStatus.STOPPED
@@ -232,7 +237,7 @@ func update(delta: float) -> void:
 ## first, so at most one instance ever plays. `offset` seeks the event's
 ## own clock forward (for scrubbing/preview); `parameters` seeds the
 ## automation parameter values an instance starts with.
-func play(event: SfxEvent, offset := 0.0, parameters: Dictionary = {}) -> void:
+func play(event: SfxEvent, offset := 0.0, parameters: Dictionary = {}, start_fraction := 0.0) -> void:
     if not event:
         return
 
@@ -245,6 +250,7 @@ func play(event: SfxEvent, offset := 0.0, parameters: Dictionary = {}) -> void:
     instance.event = event
     instance.event_name = event_name
     instance.playback_time = maxf(offset, 0.0)
+    instance.start_fraction = clampf(start_fraction, 0.0, 1.0)
     instance.parameters = parameters.duplicate(true)
     instance.status = PlaybackStatus.PLAYING
     _enter_attack(instance)
@@ -868,9 +874,24 @@ func _resolve_voice_start_position(instance: EventInstance, clip: SfxClip, autom
     var start_position := maxf(clip.stream_offset, 0.0)
     if not automation:
         if clip.trigger_mode == SfxClip.TriggerMode.TRIGGER_SUSTAIN:
-            return start_position
+            return start_position + _wrapped_start_offset(instance, clip, start_position)
         start_position += maxf(instance.playback_time - clip.offset, 0.0)
-    return start_position
+        return start_position
+    # an automation's clips are picked by a parameter and swapped as it moves, so each of them
+    # starts here - and each has to carry the instance's own shift, or the shift lasts only until
+    # the first swap
+    return start_position + _wrapped_start_offset(instance, clip, start_position)
+
+
+## The instance's own shift, as a fraction of whatever clip is starting. Several emitters playing
+## one recording in step comb-filter into a ring, and holding them apart is what MaSzyna does about
+## it (sound_source::m_startoffset, applied per queued buffer in audiorenderer.cpp:99). A fraction
+## rather than a time, so a short clip is shifted as much as a long one - and a clip swapped in by
+## an automation gets its own share of the same fraction.
+func _wrapped_start_offset(instance: EventInstance, clip: SfxClip, start_position: float) -> float:
+    if instance.start_fraction <= 0.0 or not clip.stream:
+        return 0.0
+    return maxf(clip.stream.get_length() - start_position, 0.0) * instance.start_fraction
 
 
 func _resolve_phase_locked_automation_start_position(instance: EventInstance, clip: SfxClip, automation: SfxAutomation, stream: AudioStream) -> float:
