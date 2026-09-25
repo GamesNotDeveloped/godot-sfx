@@ -896,9 +896,7 @@ func _wrapped_start_offset(instance: EventInstance, clip: SfxClip, start_positio
 
 func _resolve_phase_locked_automation_start_position(instance: EventInstance, clip: SfxClip, automation: SfxAutomation, stream: AudioStream) -> float:
     var start_position := maxf(clip.stream_offset, 0.0)
-    if not instance or not automation or not stream:
-        return start_position
-    if not automation.phase_locked or automation.phase_period <= 0.0:
+    if not instance or not stream:
         return start_position
 
     var stream_length := maxf(stream.get_length(), 0.0)
@@ -1032,7 +1030,7 @@ func _acquire_voice_slot_and_stream(clip: SfxClip, automation: SfxAutomation) ->
 
 func _resolve_voice_positions(instance: EventInstance, clip: SfxClip, automation: SfxAutomation, stream: AudioStream) -> Dictionary:
     var start_position := _resolve_voice_start_position(instance, clip, automation)
-    if automation:
+    if automation and automation.phase_locked and automation.phase_period > 0.0:
         start_position = _resolve_phase_locked_automation_start_position(instance, clip, automation, stream)
     var stream_length := maxf(stream.get_length(), 0.0)
     if stream_length > 0.0:
@@ -1462,7 +1460,7 @@ func _restart_automation_voice(voice: ActiveVoice) -> void:
         voice.slot.swap_stream(stream)
 
     var start_position := _resolve_voice_start_position(voice.event_instance, voice.clip, voice.automation)
-    if voice.automation:
+    if voice.automation and voice.automation.phase_locked and voice.automation.phase_period > 0.0:
         start_position = _resolve_phase_locked_automation_start_position(voice.event_instance, voice.clip, voice.automation, stream)
     var stream_length := maxf(stream.get_length(), 0.0) if stream else 0.0
     if stream_length > 0.0:
