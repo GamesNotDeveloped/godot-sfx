@@ -178,11 +178,13 @@ func apply_player_config() -> void:
 
 
 func clear() -> void:
+    _wait_for_tick()
     _runtime.clear()
     _request_tick()
 
 
 func sync_values(rebuild := false) -> void:
+    _wait_for_tick()
     if rebuild:
         _runtime.clear()
         for player in _nodes:
@@ -197,6 +199,14 @@ func sync_values(rebuild := false) -> void:
     _sync_editor_playback()
 
 
+## The API reads and changes what the worker's tick works on; a call made while a
+## tick is in flight (from a `process_frame` listener after GndSfxServer posted
+## it) waits for it first. The editor has no worker.
+func _wait_for_tick() -> void:
+    if not Engine.is_editor_hint():
+        GndSfxServer.wait_for_tick()
+
+
 ## There is work for the next tick: in game the server starts visiting this
 ## core again, in the editor the owning node's own _process does the ticking.
 func _request_tick() -> void:
@@ -209,6 +219,7 @@ func _request_tick() -> void:
 func play(
         event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {},
         start_fraction := 0.0) -> void:
+    _wait_for_tick()
     var bank: SfxBank = _owner.bank
     if not bank:
         return
@@ -226,34 +237,41 @@ func play(
 
 
 func seek(event_name: StringName, offset: float) -> void:
+    _wait_for_tick()
     _runtime.seek(event_name, offset)
     _request_tick()
 
 
 func modulate(event_name: StringName, parameters: Dictionary) -> void:
+    _wait_for_tick()
     _runtime.modulate(event_name, parameters)
     _request_tick()
 
 
 func set_parameters(parameters: Dictionary) -> void:
+    _wait_for_tick()
     _runtime.set_parameters(parameters)
     _request_tick()
 
 
 func stop(event_name_or_immediate = null, immediate: bool = false) -> void:
+    _wait_for_tick()
     _runtime.stop(event_name_or_immediate, immediate)
     _request_tick()
 
 
 func is_playing(event_name: StringName) -> bool:
+    _wait_for_tick()
     return _runtime.is_playing(event_name)
 
 
 func get_event_visualization_state(event_name: StringName) -> Dictionary:
+    _wait_for_tick()
     return _runtime.get_event_visualization_state(event_name)
 
 
 func play_automation(event_name: StringName, automation_name: StringName, value: float = 0.0, restart: bool = false) -> void:
+    _wait_for_tick()
     var bank: SfxBank = _owner.bank
     if not bank:
         return
@@ -265,6 +283,7 @@ func play_automation(event_name: StringName, automation_name: StringName, value:
 
 
 func stop_automation(event_name: StringName, automation_name: StringName, immediate: bool = false) -> void:
+    _wait_for_tick()
     var bank: SfxBank = _owner.bank
     if not bank:
         return

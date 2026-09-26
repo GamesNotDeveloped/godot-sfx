@@ -12,8 +12,10 @@ extends Node
 ##   * it is waited for at the start of the next frame, in _physics_process and
 ##     _process, before any game code of that frame runs.
 ## The worker therefore only ever runs while the main thread sits inside the
-## engine, so a player's API - which mutates the very state the tick reads - is
-## never concurrent with it. That API is main-thread only.
+## engine - except for whatever else listens to `process_frame` after
+## `_post_tick`: a player's API called from there would mutate the very state
+## the tick reads. So every call of that API waits for the tick first
+## (wait_for_tick()). That API is main-thread only.
 ##
 ## The worker touches no node at all: a tick writes SfxVoiceSlots, and
 ## SfxPlayerCore.flush()/observe() copy them into the audio nodes here.
@@ -55,7 +57,7 @@ func unregister_player(player:SfxPlayer3D) -> void:
 ## Starts visiting `core` again, because something was played, stopped or
 ## modulated on it.
 func activate_core(core:SfxPlayerCore) -> void:
-    _wait_for_tick()
+    wait_for_tick()
     if core.ticking:
         return
     core.ticking = true
@@ -65,7 +67,7 @@ func activate_core(core:SfxPlayerCore) -> void:
 
 
 func unregister_core(core:SfxPlayerCore) -> void:
-    _wait_for_tick()
+    wait_for_tick()
     if not core.ticking:
         return
     core.ticking = false
@@ -73,11 +75,11 @@ func unregister_core(core:SfxPlayerCore) -> void:
 
 
 func _physics_process(_delta:float) -> void:
-    _wait_for_tick()
+    wait_for_tick()
 
 
 func _process(delta:float) -> void:
-    _wait_for_tick()
+    wait_for_tick()
     for core:SfxPlayerCore in _cores:
         core.flush()
         core.observe()
@@ -97,7 +99,9 @@ func _run_tick() -> void:
         core.tick(_tick_delta)
 
 
-func _wait_for_tick() -> void:
+## Returns once no tick is running - a player calls it before it touches what
+## the tick works on
+func wait_for_tick() -> void:
     if _task_id == -1:
         return
     WorkerThreadPool.wait_for_task_completion(_task_id)
@@ -125,4 +129,4 @@ func _check_hard_cut() -> void:
 
 
 func _exit_tree() -> void:
-    _wait_for_tick()
+    wait_for_tick()
