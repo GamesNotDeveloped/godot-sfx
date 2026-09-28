@@ -492,6 +492,11 @@ func _refresh_event_clips(instance: EventInstance, previous_time: float, current
             continue
         if previous_time >= 0.0 and previous_time > current_time:
             continue
+        # an instance started (or sought) at a position does not play a clip whose span on the
+        # timeline is already over - FMOD's setTimelinePosition. Its stream may not know its
+        # length yet, and a playback asked to start at its very end starts at 0 instead.
+        if previous_time < 0.0 and clip.length > 0.0 and current_time >= clip.offset + clip.length:
+            continue
         if _start_voice(instance, clip):
             instance.triggered_event_clips.append(clip)
 
