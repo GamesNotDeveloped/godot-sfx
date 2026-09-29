@@ -56,6 +56,11 @@ var _hard_cut:bool = false
         bus = value
         _core.apply_player_config()
 
+## Whether the player falls silent beyond gnd_sfx/hard_cut_distance of the camera. Off for a
+## player whose events carry their own places (SfxSpatialConfig.position) - its own place says
+## nothing of where its voices are.
+@export var hard_cut_enabled: bool = true
+
 @export_range(0.0, 3.0) var panning_strength: float = 1.0:
     set(value):
         panning_strength = value
@@ -134,6 +139,8 @@ func play(
 
 
 func hard_cut_check(camera:Camera3D = null) -> void:
+    if not hard_cut_enabled:
+        return
     if not camera and is_inside_tree():
         camera = get_viewport().get_camera_3d()
     if not camera:
