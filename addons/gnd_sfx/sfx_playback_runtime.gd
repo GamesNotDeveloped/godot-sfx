@@ -106,6 +106,10 @@ class EventInstance:
     ## an emitter that has to stay out of phase with its neighbours needs the shift on each voice
     ## it starts, not only on the first one, and a clip swapped in later is a different length.
     var start_fraction := 0.0
+    ## The emitter's own pitch factor, on every voice of this instance - two emitters playing one
+    ## recording at slightly different speeds cannot stay in phase, so the ones that start close
+    ## together drift apart instead of ringing for as long as they play. Set once, at play().
+    var pitch_variation := 1.0
     var release_time := 0.0
     var parameters: Dictionary = {}
     var status: PlaybackStatus = PlaybackStatus.STOPPED
@@ -237,7 +241,9 @@ func update(delta: float) -> void:
 ## first, so at most one instance ever plays. `offset` seeks the event's
 ## own clock forward (for scrubbing/preview); `parameters` seeds the
 ## automation parameter values an instance starts with.
-func play(event: SfxEvent, offset := 0.0, parameters: Dictionary = {}, start_fraction := 0.0) -> void:
+func play(
+        event: SfxEvent, offset := 0.0, parameters: Dictionary = {}, start_fraction := 0.0,
+        pitch_variation := 1.0) -> void:
     if not event:
         return
 
@@ -251,6 +257,7 @@ func play(event: SfxEvent, offset := 0.0, parameters: Dictionary = {}, start_fra
     instance.event_name = event_name
     instance.playback_time = maxf(offset, 0.0)
     instance.start_fraction = clampf(start_fraction, 0.0, 1.0)
+    instance.pitch_variation = maxf(pitch_variation, 0.01)
     instance.parameters = parameters.duplicate(true)
     instance.status = PlaybackStatus.PLAYING
     _enter_attack(instance)
@@ -280,6 +287,8 @@ func seek(event_name: StringName, offset: float) -> void:
     rebuilt_instance.event = instance.event
     rebuilt_instance.event_name = event_name
     rebuilt_instance.playback_time = maxf(offset, 0.0)
+    rebuilt_instance.start_fraction = instance.start_fraction
+    rebuilt_instance.pitch_variation = instance.pitch_variation
     rebuilt_instance.release_time = release_time
     rebuilt_instance.parameters = rebuilt_parameters
     rebuilt_instance.status = PlaybackStatus.RELEASING if was_releasing else PlaybackStatus.PLAYING
@@ -749,8 +758,12 @@ func _get_available_slot() -> SfxVoiceSlot:
     return slot
 
 
+## A releasing voice goes first, then a one-shot, and a loop only when nothing else is left: a
+## stolen loop is not started again (its clip has already triggered), so a burst of one-shots
+## sharing the pool - a wheel clatter - would silence a running noise for good.
 func _find_voice_to_steal() -> ActiveVoice:
     var oldest_releasing: ActiveVoice = null
+    var oldest_one_shot: ActiveVoice = null
     var oldest_global: ActiveVoice = null
     for voice in _active_voices:
         if not voice:
@@ -760,7 +773,12 @@ func _find_voice_to_steal() -> ActiveVoice:
         if voice.event_instance and voice.event_instance.status == PlaybackStatus.RELEASING:
             if not oldest_releasing or voice.creation_order < oldest_releasing.creation_order:
                 oldest_releasing = voice
-    return oldest_releasing if oldest_releasing else oldest_global
+        if not SfxStreamLoopSupport.is_looping(voice.stream):
+            if not oldest_one_shot or voice.creation_order < oldest_one_shot.creation_order:
+                oldest_one_shot = voice
+    if oldest_releasing:
+        return oldest_releasing
+    return oldest_one_shot if oldest_one_shot else oldest_global
 
 
 func _acquire_slot_for_new_voice() -> SfxVoiceSlot:
@@ -1192,7 +1210,7 @@ func _apply_voice_state(voice: ActiveVoice) -> void:
             * clip_gain * mixer_gain * parameter_gain,
             0.0001))
     voice.slot.apply_gain(gain_db)
-    voice.slot.apply_pitch(maxf(pitch * parameter_pitch, 0.01))
+    voice.slot.apply_pitch(maxf(pitch * parameter_pitch * voice.event_instance.pitch_variation, 0.01))
     var spatial_config := voice.event_instance.event.spatial_config
     if spatial_config:
         voice.slot.apply_spatial(spatial_config, spatial_config.unit_size * parameter_unit_size)
