@@ -216,9 +216,7 @@ func _request_tick() -> void:
     GndSfxServer.activate_core(self)
 
 
-func play(
-        event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {},
-        start_fraction := 0.0, pitch_variation := 1.0) -> void:
+func play(event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {}) -> void:
     _wait_for_tick()
     var bank: SfxBank = _owner.bank
     if not bank:
@@ -232,7 +230,7 @@ func play(
 
     var event := bank.get_event(event_name)
     if event:
-        _runtime.play(event, offset, parameters, start_fraction, pitch_variation)
+        _runtime.play(event, offset, parameters)
         _request_tick()
 
 

@@ -34,6 +34,9 @@ enum TriggerMode {
 @export var fade_out_curve: Curve
 @export var pitch_curve: Curve
 @export var trigger_mode: TriggerMode = TriggerMode.TRIGGER_TIMELINE
+## The opening or closing piece of a longer sound: it plays from its own start, never shifted by
+## the event's start_fraction.
+@export var bookend := false
 ## When this clip stops being the active one (e.g. an automation parameter
 ## leaves its range), true stops it immediately; false lets it finish/loop
 ## out via finish-on-end instead of cutting it off.

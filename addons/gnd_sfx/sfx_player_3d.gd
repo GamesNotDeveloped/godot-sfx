@@ -127,16 +127,11 @@ func sync_values(rebuild := false) -> void:
     _core.sync_values(rebuild)
 
 
-## `start_fraction` shifts every voice of this event that far into its own clip, and
-## `pitch_variation` scales the pitch of every one of them - what holds one recording played by
-## many emitters out of phase with itself (see SfxPlaybackRuntime).
-func play(
-        event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {},
-        start_fraction := 0.0, pitch_variation := 1.0) -> void:
+func play(event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {}) -> void:
     hard_cut_check()
     if _hard_cut:
         return
-    _core.play(event_name, offset_or_parameters, parameters, start_fraction, pitch_variation)
+    _core.play(event_name, offset_or_parameters, parameters)
 
 
 func hard_cut_check(camera:Camera3D = null) -> void:
