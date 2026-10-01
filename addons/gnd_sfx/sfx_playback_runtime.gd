@@ -883,6 +883,10 @@ func _resolve_voice_start_position(instance: EventInstance, clip: SfxClip, autom
         if clip.trigger_mode == SfxClip.TriggerMode.TRIGGER_SUSTAIN:
             return start_position + _wrapped_start_offset(instance, clip, start_position)
         start_position += maxf(instance.playback_time - clip.offset, 0.0)
+        # a plain loop is the other shape of one recording played by many emitters (a single
+        # sample running noise), and combs the same way; a one-shot keeps its own start
+        if SfxStreamLoopSupport.is_looping(clip.stream):
+            return start_position + _wrapped_start_offset(instance, clip, start_position)
         return start_position
     # an automation's clips are picked by a parameter and swapped as it moves, so each of them
     # starts here - and each has to carry the instance's own shift, or the shift lasts only until
