@@ -4,6 +4,8 @@ class_name SfxPlayer3D
 
 signal finished
 
+const HARD_CUT_DISTANCE_SETTING:StringName = &"gnd_sfx/hard_cut_distance"
+
 var _core := SfxPlayerCore.new(
     self,
     func(): return AudioStreamPlayer3D.new(),
@@ -13,14 +15,17 @@ var _core := SfxPlayerCore.new(
         player.panning_strength = panning_strength
         player.attenuation_model = attenuation_model
         player.unit_size = unit_size
+        player.bus = bus
 )
+
+var _hard_cut:bool = false
 
 @export var bank: SfxBank:
     set(value):
         bank = value
         _core.events_changed()
 
-@export var max_tracks: int = 10:
+@export var max_tracks: int = 4:
     set(value):
         max_tracks = value
         _core.sync_values(true)
@@ -44,6 +49,17 @@ var _core := SfxPlayerCore.new(
     set(value):
         max_polyphony = value
         _core.apply_player_config()
+
+## Audio bus of every voice this player creates.
+@export var bus: StringName = &"Master":
+    set(value):
+        bus = value
+        _core.apply_player_config()
+
+## Whether the player falls silent beyond gnd_sfx/hard_cut_distance of the camera. Off for a
+## player whose events carry their own places (SfxSpatialConfig.position) - its own place says
+## nothing of where its voices are.
+@export var hard_cut_enabled: bool = true
 
 @export_range(0.0, 3.0) var panning_strength: float = 1.0:
     set(value):
@@ -83,15 +99,24 @@ func _enter_tree() -> void:
 
 
 func _ready() -> void:
+    if Engine.is_editor_hint():
+        _core.activate()
+        return
+    set_process(false)
+    hard_cut_check()
+    GndSfxServer.register_player(self)
     _core.activate()
 
 
 func _exit_tree() -> void:
+    if not Engine.is_editor_hint():
+        GndSfxServer.unregister_player(self)
     _core.deactivate()
 
 
-func _process(delta: float) -> void:
-    _core.advance(delta)
+## Editor preview only - in game GndSfxServer ticks the core off the main thread
+func _process(delta:float) -> void:
+    _core.tick_preview(delta)
 
 
 func _validate_property(property: Dictionary) -> void:
@@ -103,7 +128,26 @@ func sync_values(rebuild := false) -> void:
 
 
 func play(event_name: StringName, offset_or_parameters = null, parameters: Dictionary = {}) -> void:
+    hard_cut_check()
+    if _hard_cut:
+        return
     _core.play(event_name, offset_or_parameters, parameters)
+
+
+func hard_cut_check(camera:Camera3D = null) -> void:
+    if not hard_cut_enabled:
+        return
+    if not camera and is_inside_tree():
+        camera = get_viewport().get_camera_3d()
+    if not camera:
+        _hard_cut = false
+        return
+    var distance:float = global_position.distance_to(camera.global_position)
+    var limit:float = float(ProjectSettings.get_setting(HARD_CUT_DISTANCE_SETTING, 1000.0))
+    var hard_cut:bool = distance > limit
+    if hard_cut and not _hard_cut:
+        _core.clear()
+    _hard_cut = hard_cut
 
 
 func seek(event_name: StringName, offset: float) -> void:

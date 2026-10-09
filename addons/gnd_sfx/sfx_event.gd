@@ -65,6 +65,30 @@ class_name SfxEvent
         automations = value
         emit_changed()
 
+@export var parameter_modulations: Array[SfxParameterModulation] = []:
+    set(value):
+        parameter_modulations = value
+        emit_changed()
+
+@export var spatial_config: SfxSpatialConfig:
+    set(value):
+        spatial_config = value
+        emit_changed()
+
+## The emitter this event is: how far into its own stream each of its voices starts, as a fraction
+## of that stream (bookend clips excepted), and the factor on the pitch of every one of them. One
+## recording played by many emitters at one start and one speed comb-filters into a ring; these
+## hold the copies apart and let the ones that start close drift apart.
+@export_range(0.0, 1.0, 0.001) var start_fraction := 0.0:
+    set(value):
+        start_fraction = value
+        emit_changed()
+
+@export_range(0.5, 2.0, 0.001) var pitch_variation := 1.0:
+    set(value):
+        pitch_variation = value
+        emit_changed()
+
 
 static func _make_master_track() -> SfxTrack:
     var track := SfxTrack.new()
