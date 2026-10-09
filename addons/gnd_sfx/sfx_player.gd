@@ -7,7 +7,9 @@ signal finished
 var _core := SfxPlayerCore.new(
     self,
     func(): return AudioStreamPlayer.new(),
-    func(player): player.max_polyphony = max_polyphony
+    func(player):
+        player.max_polyphony = max_polyphony
+        player.bus = bus
 )
 
 @export var bank: SfxBank:
@@ -15,7 +17,7 @@ var _core := SfxPlayerCore.new(
         bank = value
         _core.events_changed()
 
-@export var max_tracks: int = 10:
+@export var max_tracks: int = 4:
     set(value):
         max_tracks = value
         _core.sync_values(true)
@@ -23,6 +25,12 @@ var _core := SfxPlayerCore.new(
 @export var max_polyphony: int = 1:
     set(value):
         max_polyphony = value
+        _core.apply_player_config()
+
+## Audio bus of every voice this player creates.
+@export var bus: StringName = &"Master":
+    set(value):
+        bus = value
         _core.apply_player_config()
 
 @export_group("Playback", "playback")
@@ -58,6 +66,7 @@ func _enter_tree() -> void:
 
 
 func _ready() -> void:
+    set_process(Engine.is_editor_hint())
     _core.activate()
 
 
@@ -65,8 +74,9 @@ func _exit_tree() -> void:
     _core.deactivate()
 
 
+## Editor preview only - in game GndSfxServer ticks the core off the main thread
 func _process(delta: float) -> void:
-    _core.advance(delta)
+    _core.tick_preview(delta)
 
 
 func _validate_property(property: Dictionary) -> void:

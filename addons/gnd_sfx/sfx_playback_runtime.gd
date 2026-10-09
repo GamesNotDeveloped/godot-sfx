@@ -2,11 +2,11 @@ extends RefCounted
 class_name SfxPlaybackRuntime
 
 ## The actual playback engine behind SfxPlayer/SfxPlayer3D (via
-## SfxPlayerCore) - those are thin Node wrappers that just own a pool of
-## AudioStreamPlayer(3D) nodes and forward calls here. This class owns no
-## nodes itself and knows nothing about the scene tree beyond the player
-## pool it's given via set_players(); call update(delta) once per frame to
-## drive it.
+## SfxPlayerCore) - those are thin Node wrappers that forward calls here.
+## This class touches no node at all: it works on SfxVoiceSlots, which
+## SfxPlayerCore copies into the pooled AudioStreamPlayer(3D) nodes on the
+## main thread. update(delta) is called once per frame by GndSfxServer, on its
+## worker thread, so nothing here may reach the scene tree or emit a signal.
 ##
 ## Vocabulary used throughout this file:
 ## - An EventInstance is one "playing" of an SfxEvent (play() creates one;
@@ -108,14 +108,16 @@ class EventInstance:
     var triggered_event_clips: Array[SfxClip] = []
     var triggered_sustain_clips: Array[SfxClip] = []
     var triggered_automation_clips := {}
+    ## A parameter moved and the automation clips have not been looked at yet
+    var automation_refresh_pending := false
 
 
-## One AudioStreamPlayer(3D) currently assigned to play one SfxClip for one
-## EventInstance. `player_token` lets the runtime tell "this voice still
-## owns that player" apart from "that player was stolen/reset and reused
-## for something else" after the fact (see _voice_owns_player).
+## One SfxVoiceSlot currently assigned to play one SfxClip for one
+## EventInstance. `slot_token` lets the runtime tell "this voice still owns
+## that slot" apart from "that slot was stolen/reset and reused for
+## something else" after the fact (see _voice_owns_slot).
 class ActiveVoice:
-    var player
+    var slot: SfxVoiceSlot
     var event_instance: EventInstance
     var clip: SfxClip
     var stream: AudioStream
@@ -132,30 +134,50 @@ class ActiveVoice:
     var finish_duration := 0.0
     var stop_elapsed := 0.0
     var stop_fade_duration := 0.0
-    var player_token := 0
+    var slot_token := 0
     var creation_order := 0
     var track_adsr := AdsrEnvelope.new()
     var automation_current_gain := 1.0
     var automation_release_gain := 1.0
 
 
-signal finished
-signal process_requirement_changed(required: bool)
-
-var _players: Array = []
+var _slots: Array[SfxVoiceSlot] = []
+## How many slots this runtime may claim - the owning player's max_tracks
+var _slot_capacity: int = 0
 var _active_voices: Array[ActiveVoice] = []
 var _instances: Dictionary = {}
-var _player_tokens := {}
 var _voice_creation_counter := 0
+## Raised once the last voice and instance are gone. SfxPlayerCore turns it
+## into the owner's `finished` signal on the main thread - a tick runs on the
+## worker thread, where nothing may reach game code.
+var _finished_pending: bool = false
 
 
-## Sets the pool of AudioStreamPlayer/AudioStreamPlayer3D nodes this
-## runtime allocates voices from. Called by SfxPlayerCore whenever
-## max_tracks changes and the player pool is rebuilt; existing voices are
-## not migrated, so callers rebuild the pool via clear() first.
-func set_players(players: Array) -> void:
-    _players = players
-    _notify_process_requirement_changed()
+## How many voice slots this runtime may claim at once (the owning player's
+## max_tracks). Called by SfxPlayerCore whenever that changes and the pool is
+## rebuilt; existing voices are not migrated, so callers clear() first.
+func set_slot_capacity(capacity: int) -> void:
+    _slot_capacity = maxi(capacity, 0)
+    if _slots.size() > _slot_capacity:
+        _slots.resize(_slot_capacity)
+
+
+## The slots claimed so far. SfxPlayerCore walks them to create the nodes they
+## ask for and to read their playback state back.
+func get_slots() -> Array[SfxVoiceSlot]:
+    return _slots
+
+
+## Drops the whole pool, for when SfxPlayerCore has freed the nodes behind it.
+func release_slots() -> void:
+    _slots.clear()
+
+
+## True if the runtime ran dry since the last call - see _finished_pending.
+func consume_finished() -> bool:
+    var was_finished := _finished_pending
+    _finished_pending = false
+    return was_finished
 
 
 ## Immediately stops every voice and forgets every instance, with no
@@ -165,27 +187,22 @@ func clear() -> void:
     var had_activity := _active_voices or _instances
     for voice in _active_voices:
         _cleanup_voice(voice)
-    for player in _players:
-        _reset_player(player, true)
+    for slot in _slots:
+        slot.reset(true)
     _active_voices.clear()
     _instances.clear()
-    _notify_process_requirement_changed()
     if had_activity:
-        finished.emit()
+        _finished_pending = true
 
 
-## Connected by SfxPlayerCore to each player's own `finished` signal. Only
-## releases the voice if the player actually stopped on its own (a
-## one-shot clip reaching its end) - a player deliberately stopped by this
-## runtime already went through _release_voice, and Godot still emits
-## `finished` in some of those cases too.
-func handle_player_finished(player) -> void:
-    if not is_instance_valid(player):
+## Called by SfxPlayerCore when the node behind `slot` emitted its own
+## `finished` signal and really did stop on its own (a one-shot clip reaching
+## its end) - a node this runtime stopped deliberately already went through
+## _release_voice, and Godot still emits `finished` in some of those cases.
+func handle_slot_finished(slot: SfxVoiceSlot) -> void:
+    if not slot:
         return
-    if player.playing:
-        return
-    var token := int(_player_tokens.get(player, 0))
-    var index := _find_active_voice_index(player, token)
+    var index := _find_active_voice_index(slot, slot.token)
     if not index == -1:
         _release_voice(index)
 
@@ -208,7 +225,6 @@ func update(delta: float) -> void:
         _update_voice(index, delta)
 
     _collect_finished_instances()
-    _notify_process_requirement_changed()
 
 
 ## Starts a new EventInstance for `event`. If event.polyphony_enabled is
@@ -236,7 +252,6 @@ func play(event: SfxEvent, offset := 0.0, parameters: Dictionary = {}) -> void:
 
     _refresh_event_clips(instance, -1.0, instance.playback_time)
     _refresh_automation_clips(instance)
-    _notify_process_requirement_changed()
 
 
 ## Jumps the latest instance of `event_name` to a new playback time by
@@ -270,26 +285,32 @@ func seek(event_name: StringName, offset: float) -> void:
     if was_releasing:
         _refresh_sustain_clips(rebuilt_instance, -1.0, rebuilt_instance.release_time)
     _refresh_automation_clips(rebuilt_instance)
-    _notify_process_requirement_changed()
 
 
 ## Updates automation parameter values (e.g. "rpm") for the latest
 ## instance of `event_name`, which may start, stop, or crossfade
 ## automation voices depending on which clips' domains the new values fall
 ## into. Does nothing if the event isn't currently playing.
+##
+## Only the values are written here - which clips that leaves playing is worked
+## out by the next tick, on the worker thread. Callers poll this every frame
+## for every vehicle, and the gains it used to compute were computed again by
+## that tick anyway.
 func modulate(event_name: StringName, parameters: Dictionary) -> void:
     var instance := _get_latest_instance(event_name)
     if not instance:
         return
 
+    # Skip the refresh entirely when nothing changed - callers commonly poll every tick.
+    var changed := false
     for key in parameters.keys():
-        instance.parameters[key] = parameters[key]
+        if not instance.parameters.get(key) == parameters[key]:
+            instance.parameters[key] = parameters[key]
+            changed = true
+    if not changed:
+        return
 
-    _refresh_automation_clips(instance)
-    for voice in _active_voices:
-        if voice.event_instance == instance and voice.automation:
-            _apply_voice_state(voice)
-    _notify_process_requirement_changed()
+    instance.automation_refresh_pending = true
 
 
 ## Batch form of modulate(): `parameters` maps event_name -> its own
@@ -329,7 +350,6 @@ func stop_all(immediate: bool = false) -> void:
         _stop_event_instance(instance, immediate)
 
     _collect_finished_instances()
-    _notify_process_requirement_changed()
 
 
 ## Stops the newest stoppable instance of `event_name` (see
@@ -342,7 +362,6 @@ func stop_event(event_name: StringName, immediate: bool = false) -> void:
         _stop_event_instance(instance, immediate)
 
     _collect_finished_instances()
-    _notify_process_requirement_changed()
 
 
 ## Convenience for driving one automation parameter directly: starts the
@@ -373,9 +392,11 @@ func stop_automation(event: SfxEvent, _automation_name: StringName, immediate: b
 
 ## True if `event_name` has at least one active instance, including one
 ## that's still releasing (fading out / in ADSR release) after a
-## non-immediate stop.
+## non-immediate stop. Answered from the instance table directly -
+## _remove_instance() drops the key with its last instance, and callers poll
+## this per event per frame, so it must not build an array to look at.
 func is_playing(event_name: StringName) -> bool:
-    return not _get_instances_for_event(event_name).is_empty()
+    return _instances.has(event_name)
 
 
 ## Snapshot of the latest instance's state for UI display (TimelineView/
@@ -425,10 +446,9 @@ func get_event_visualization_state(event_name: StringName) -> Dictionary:
     }
 
 
-## True while there's anything left for update() to do. SfxPlayerCore
-## listens to process_requirement_changed (emitted whenever this could
-## have changed) to turn the owning Node's _process() on/off, so idle
-## players don't tick every frame for nothing.
+## True while there's anything left for update() to do. GndSfxServer drops a core
+## whose runtime says false from the set it ticks, so idle players cost nothing
+## per frame.
 func requires_process() -> bool:
     return _active_voices or _instances
 
@@ -436,6 +456,10 @@ func requires_process() -> bool:
 func _update_instance(instance: EventInstance, delta: float) -> void:
     if not instance:
         return
+
+    if instance.automation_refresh_pending:
+        instance.automation_refresh_pending = false
+        _refresh_automation_clips(instance)
 
     var previous_time := instance.playback_time
     var previous_release_time := instance.release_time
@@ -461,6 +485,13 @@ func _refresh_event_clips(instance: EventInstance, previous_time: float, current
         if current_time < clip.offset:
             continue
         if previous_time >= 0.0 and previous_time > current_time:
+            continue
+        # an instance started (or sought) at a position does not play a clip whose span on the
+        # timeline is already over - FMOD's setTimelinePosition. Its stream may not know its
+        # length yet, and a playback asked to start at its very end starts at 0 instead. The
+        # clip is done for this instance, or the next tick would find it due and start it.
+        if previous_time < 0.0 and clip.length > 0.0 and current_time >= clip.offset + clip.length:
+            instance.triggered_event_clips.append(clip)
             continue
         if _start_voice(instance, clip):
             instance.triggered_event_clips.append(clip)
@@ -506,11 +537,11 @@ func _refresh_automation_clips(instance: EventInstance) -> void:
             var active_now := _automation_clip_contains_value(automation, clip, current_value)
             var triggered := triggered_clips.has(clip)
             if active_now:
-                if not voice or _automation_voice_is_releasing(voice):
-                    if _start_voice(instance, clip, automation) and not triggered:
+                if not triggered:
+                    if voice and not _automation_voice_is_releasing(voice):
                         triggered_clips.append(clip)
-                elif not triggered:
-                    triggered_clips.append(clip)
+                    elif _start_voice(instance, clip, automation):
+                        triggered_clips.append(clip)
                 continue
 
             if triggered:
@@ -611,10 +642,10 @@ func _resolve_track_mixer_gain(voice: ActiveVoice) -> float:
     return mixer_gain
 
 
-func _find_active_voice_index(player, token: int = -1) -> int:
+func _find_active_voice_index(slot: SfxVoiceSlot, token: int = -1) -> int:
     for index in range(_active_voices.size()):
         var voice := _active_voices[index]
-        if voice.player == player and (token == -1 or voice.player_token == token):
+        if voice.slot == slot and (token == -1 or voice.slot_token == token):
             return index
     return -1
 
@@ -698,15 +729,26 @@ func _has_instance(instance: EventInstance) -> bool:
     return _get_instances_for_event(instance.event_name).has(instance)
 
 
-func _get_available_player():
-    for player in _players:
-        if _find_active_voice_index(player) == -1:
-            return player
-    return null
+## A free slot, or a new one while the pool may still grow. The node behind a
+## slot is created by SfxPlayerCore the first time the slot asks to play, so a
+## player that never plays anything owns no audio nodes at all.
+func _get_available_slot() -> SfxVoiceSlot:
+    for slot in _slots:
+        if _find_active_voice_index(slot) == -1:
+            return slot
+    if _slots.size() >= _slot_capacity:
+        return null
+    var slot := SfxVoiceSlot.new()
+    _slots.append(slot)
+    return slot
 
 
+## A releasing voice goes first, then a one-shot, and a loop only when nothing else is left: a
+## stolen loop is not started again (its clip has already triggered), so a burst of one-shots
+## sharing the pool - a wheel clatter - would silence a running noise for good.
 func _find_voice_to_steal() -> ActiveVoice:
     var oldest_releasing: ActiveVoice = null
+    var oldest_one_shot: ActiveVoice = null
     var oldest_global: ActiveVoice = null
     for voice in _active_voices:
         if not voice:
@@ -716,21 +758,26 @@ func _find_voice_to_steal() -> ActiveVoice:
         if voice.event_instance and voice.event_instance.status == PlaybackStatus.RELEASING:
             if not oldest_releasing or voice.creation_order < oldest_releasing.creation_order:
                 oldest_releasing = voice
-    return oldest_releasing if oldest_releasing else oldest_global
+        if not SfxStreamLoopSupport.is_looping(voice.stream):
+            if not oldest_one_shot or voice.creation_order < oldest_one_shot.creation_order:
+                oldest_one_shot = voice
+    if oldest_releasing:
+        return oldest_releasing
+    return oldest_one_shot if oldest_one_shot else oldest_global
 
 
-func _acquire_player_for_new_voice():
-    var player = _get_available_player()
-    if player:
-        return player
+func _acquire_slot_for_new_voice() -> SfxVoiceSlot:
+    var slot := _get_available_slot()
+    if slot:
+        return slot
 
     var victim := _find_voice_to_steal()
-    if not victim or not is_instance_valid(victim.player):
+    if not victim or not victim.slot:
         return null
 
-    var stolen_player = victim.player
+    var stolen_slot := victim.slot
     _stop_voice(_active_voices.find(victim))
-    return stolen_player
+    return stolen_slot
 
 
 func _get_curve_duration(curve: Curve) -> float:
@@ -780,18 +827,8 @@ func _sample_automation_fade_out_curve(curve: Curve, clip: SfxClip, value: float
     return curve.sample(sample_position)
 
 
-func _is_generator_voice(voice: ActiveVoice) -> bool:
-    return voice.generator_playback and voice.generator_stream_playback
-
-
-func _set_player_gain(player, gain: float) -> void:
-    player.volume_db = linear_to_db(maxf(gain, 0.0001))
-
-
 func _build_generator_context(voice: ActiveVoice, delta: float) -> Dictionary:
-    var playback_position := 0.0
-    if is_instance_valid(voice.player):
-        playback_position = voice.player.get_playback_position()
+    var playback_position: float = voice.slot.playback_position
 
     var automation_value = null
     if voice.automation:
@@ -802,7 +839,6 @@ func _build_generator_context(voice: ActiveVoice, delta: float) -> Dictionary:
         "playback_position": playback_position,
         "event_name": voice.event_instance.event_name,
         "clip": voice.clip,
-        "player": voice.player,
         "stream_playback": voice.generator_stream_playback,
         "event_time": voice.event_instance.playback_time,
         "parameters": voice.event_instance.parameters,
@@ -811,9 +847,18 @@ func _build_generator_context(voice: ActiveVoice, delta: float) -> Dictionary:
     }
 
 
+## The AudioStreamGeneratorPlayback only exists once the main thread has
+## actually started the node, so a generator voice picks it up from its slot on
+## the first tick after that and builds its state then.
 func _pump_generator_voice(voice: ActiveVoice, delta: float) -> void:
-    if not _is_generator_voice(voice):
+    if not voice.generator_playback:
         return
+    if not voice.generator_stream_playback:
+        voice.generator_stream_playback = voice.slot.generator_stream_playback
+        if not voice.generator_stream_playback:
+            return
+        voice.generator_state = voice.generator_playback.create_state(
+                voice.generator_stream_playback, voice.clip)
     voice.generator_playback.update(voice.generator_state, _build_generator_context(voice, delta))
 
 
@@ -837,18 +882,28 @@ func _build_clip_stream(clip: SfxClip, automation: SfxAutomation = null) -> Audi
 
 func _resolve_voice_start_position(instance: EventInstance, clip: SfxClip, automation: SfxAutomation = null) -> float:
     var start_position := maxf(clip.stream_offset, 0.0)
-    if not automation:
-        if clip.trigger_mode == SfxClip.TriggerMode.TRIGGER_SUSTAIN:
-            return start_position
+    if not automation and clip.trigger_mode == SfxClip.TriggerMode.TRIGGER_TIMELINE:
         start_position += maxf(instance.playback_time - clip.offset, 0.0)
-    return start_position
+    # every clip but a bookend carries the event's shift - a single sample, the loop after an
+    # opening bookend, and each clip an automation swaps in (MaSzyna's audiorenderer_extra.h)
+    return start_position + _wrapped_start_offset(instance, clip, start_position)
+
+
+## The event's own shift, as a fraction of whatever clip is starting. Several emitters playing
+## one recording in step comb-filter into a ring, and holding them apart is what MaSzyna does about
+## it (sound_source::m_startoffset, applied per queued buffer in audiorenderer.cpp:99). A fraction
+## rather than a time, so a short clip is shifted as much as a long one - and a clip swapped in by
+## an automation gets its own share of the same fraction.
+func _wrapped_start_offset(instance: EventInstance, clip: SfxClip, start_position: float) -> float:
+    var start_fraction := instance.event.start_fraction
+    if start_fraction <= 0.0 or clip.bookend or not clip.stream:
+        return 0.0
+    return maxf(clip.stream.get_length() - start_position, 0.0) * start_fraction
 
 
 func _resolve_phase_locked_automation_start_position(instance: EventInstance, clip: SfxClip, automation: SfxAutomation, stream: AudioStream) -> float:
     var start_position := maxf(clip.stream_offset, 0.0)
-    if not instance or not automation or not stream:
-        return start_position
-    if not automation.phase_locked or automation.phase_period <= 0.0:
+    if not instance or not stream:
         return start_position
 
     var stream_length := maxf(stream.get_length(), 0.0)
@@ -923,7 +978,7 @@ func _resolve_visual_clip_position(voice: ActiveVoice, playback_position: float,
 
 
 func _build_visual_clip_state(clip: SfxClip, voice: ActiveVoice, use_clip_length := true, instance: EventInstance = null) -> Dictionary:
-    if not clip or not voice or not is_instance_valid(voice.player):
+    if not clip or not voice or not voice.slot:
         return {
             "active": false,
             "visible_span": _resolve_visual_clip_span(clip, null, use_clip_length),
@@ -936,7 +991,7 @@ func _build_visual_clip_state(clip: SfxClip, voice: ActiveVoice, use_clip_length
     if instance and clip.trigger_mode == SfxClip.TriggerMode.TRIGGER_TIMELINE:
         position = _wrap_or_clamp_position(maxf(instance.playback_time - maxf(clip.offset, 0.0), 0.0), visible_span, voice.stream)
     else:
-        position = _resolve_visual_clip_position(voice, voice.player.get_playback_position(), visible_span)
+        position = _resolve_visual_clip_position(voice, voice.slot.playback_position, visible_span)
     return {
         "active": true,
         "visible_span": visible_span,
@@ -970,19 +1025,19 @@ func _reuse_existing_voice_if_present(instance: EventInstance, clip: SfxClip, au
     return true if time_voice else false
 
 
-func _acquire_voice_player_and_stream(clip: SfxClip, automation: SfxAutomation) -> Dictionary:
-    var player = _acquire_player_for_new_voice()
-    if not player:
+func _acquire_voice_slot_and_stream(clip: SfxClip, automation: SfxAutomation) -> Dictionary:
+    var slot := _acquire_slot_for_new_voice()
+    if not slot:
         return {}
     var stream := _build_clip_stream(clip, automation)
     if not stream:
         return {}
-    return {"player": player, "stream": stream}
+    return {"slot": slot, "stream": stream}
 
 
 func _resolve_voice_positions(instance: EventInstance, clip: SfxClip, automation: SfxAutomation, stream: AudioStream) -> Dictionary:
     var start_position := _resolve_voice_start_position(instance, clip, automation)
-    if automation:
+    if automation and automation.phase_locked and automation.phase_period > 0.0:
         start_position = _resolve_phase_locked_automation_start_position(instance, clip, automation, stream)
     var stream_length := maxf(stream.get_length(), 0.0)
     if stream_length > 0.0:
@@ -993,40 +1048,28 @@ func _resolve_voice_positions(instance: EventInstance, clip: SfxClip, automation
     return {"start": start_position, "end": end_position}
 
 
-func _setup_generator_voice(voice: ActiveVoice, player, clip: SfxClip) -> bool:
-    voice.generator_playback = clip.generator_playback
-    voice.generator_stream_playback = player.get_stream_playback() as AudioStreamGeneratorPlayback
-    if not voice.generator_stream_playback:
-        push_error("Failed to get AudioStreamGeneratorPlayback for generator clip")
-        _reset_player(player, true)
-        return false
-    voice.generator_state = voice.generator_playback.create_state(voice.generator_stream_playback, clip)
-    return true
-
-
 func _start_voice(instance: EventInstance, clip: SfxClip, automation: SfxAutomation = null) -> bool:
     var automation_name := automation.parameter_name if automation else &""
     if _reuse_existing_voice_if_present(instance, clip, automation, automation_name):
         return true
 
-    var acquired := _acquire_voice_player_and_stream(clip, automation)
+    var acquired := _acquire_voice_slot_and_stream(clip, automation)
     if not acquired:
         return false
-    var player = acquired["player"]
+    var slot: SfxVoiceSlot = acquired["slot"]
     var stream: AudioStream = acquired["stream"]
 
     var positions := _resolve_voice_positions(instance, clip, automation, stream)
     var start_position: float = positions["start"]
     var end_position: float = positions["end"]
 
-    player.stream = stream
-    player.pitch_scale = 1.0
-    var player_token := int(_player_tokens.get(player, 0)) + 1
-    _player_tokens[player] = player_token
-    player.play(start_position)
+    slot.apply_pitch(1.0)
+    slot.wants_generator = stream is AudioStreamGenerator
+    var slot_token := slot.claim()
+    slot.play_stream(stream, start_position)
 
     var voice := ActiveVoice.new()
-    voice.player = player
+    voice.slot = slot
     voice.event_instance = instance
     voice.clip = clip
     voice.stream = stream
@@ -1034,13 +1077,11 @@ func _start_voice(instance: EventInstance, clip: SfxClip, automation: SfxAutomat
     voice.stream_end_position = end_position
     voice.automation = automation
     voice.automation_name = automation_name
-    voice.player_token = player_token
+    voice.slot_token = slot_token
     voice.creation_order = _voice_creation_counter
     _voice_creation_counter += 1
+    voice.generator_playback = clip.generator_playback if slot.wants_generator else null
     _enter_track_attack(voice)
-
-    if stream is AudioStreamGenerator and not _setup_generator_voice(voice, player, clip):
-        return false
 
     _active_voices.append(voice)
     _apply_voice_state(voice)
@@ -1093,7 +1134,7 @@ func _resolve_automation_clip_gain(voice: ActiveVoice) -> float:
 
 
 func _apply_voice_state(voice: ActiveVoice) -> void:
-    if not voice or not is_instance_valid(voice.player):
+    if not voice or not voice.slot:
         return
 
     var clip_gain := 1.0
@@ -1110,8 +1151,8 @@ func _apply_voice_state(voice: ActiveVoice) -> void:
         pitch *= _sample_automation_curve(voice.automation.pitch_curve, automation_value)
     else:
         var playback_position := 0.0
-        if voice.player.playing:
-            playback_position = voice.player.get_playback_position()
+        if voice.slot.playing:
+            playback_position = voice.slot.playback_position
         var local_clip_time := _resolve_local_clip_time(voice, playback_position)
         var remaining_clip_time := _resolve_remaining_clip_time(voice, playback_position)
         clip_gain = clampf(_sample_curve_gain(voice.clip.fade_in_curve, local_clip_time), 0.0, 1.0)
@@ -1122,9 +1163,37 @@ func _apply_voice_state(voice: ActiveVoice) -> void:
             clip_gain *= clampf(_sample_time_fade_out_curve(voice.clip.fade_out_curve, remaining_clip_time), 0.0, 1.0)
         pitch = _sample_curve_gain(voice.clip.pitch_curve, local_clip_time)
 
+    var parameter_gain := 1.0
+    var parameter_pitch := 1.0
+    var parameter_unit_size := 1.0
+    for modulation in voice.event_instance.event.parameter_modulations:
+        if not modulation or not modulation.parameter_name:
+            continue
+        var value := float(voice.event_instance.parameters.get(modulation.parameter_name, modulation.default_value))
+        var result := value
+        if modulation.curve:
+            result = modulation.curve.sample(clampf(value, modulation.min_domain, modulation.max_domain))
+        match modulation.target:
+            SfxParameterModulation.Target.GAIN:
+                parameter_gain *= maxf(result, 0.0)
+            SfxParameterModulation.Target.PITCH:
+                parameter_pitch *= maxf(result, 0.01)
+            SfxParameterModulation.Target.UNIT_SIZE:
+                parameter_unit_size *= maxf(result, 0.01)
+
     var mixer_gain := _resolve_track_mixer_gain(voice)
-    _set_player_gain(voice.player, clampf(_current_adsr_gain(voice.event_instance), 0.0, 1.0) * clampf(_current_track_adsr_gain(voice), 0.0, 1.0) * clip_gain * mixer_gain)
-    voice.player.pitch_scale = maxf(pitch, 0.01)
+    var gain_db:float = linear_to_db(maxf(
+            clampf(_current_adsr_gain(voice.event_instance), 0.0, 1.0)
+            * clampf(_current_track_adsr_gain(voice), 0.0, 1.0)
+            * clip_gain * mixer_gain * parameter_gain,
+            0.0001))
+    voice.slot.apply_gain(gain_db)
+    voice.slot.apply_pitch(maxf(pitch * parameter_pitch * voice.event_instance.event.pitch_variation, 0.01))
+    var spatial_config := voice.event_instance.event.spatial_config
+    if spatial_config:
+        voice.slot.apply_spatial(spatial_config, spatial_config.unit_size * parameter_unit_size)
+    else:
+        voice.slot.clear_spatial()
 
 
 func _cleanup_voice(voice: ActiveVoice) -> void:
@@ -1132,10 +1201,10 @@ func _cleanup_voice(voice: ActiveVoice) -> void:
         voice.generator_playback.cleanup(voice.generator_state)
 
 
-func _voice_owns_player(voice: ActiveVoice) -> bool:
-    if not voice or not is_instance_valid(voice.player):
+func _voice_owns_slot(voice: ActiveVoice) -> bool:
+    if not voice or not voice.slot:
         return false
-    return int(_player_tokens.get(voice.player, 0)) == voice.player_token
+    return voice.slot.token == voice.slot_token
 
 
 func _release_voice(index: int) -> void:
@@ -1144,13 +1213,14 @@ func _release_voice(index: int) -> void:
 
     var voice := _active_voices[index]
     _cleanup_voice(voice)
-    if _voice_owns_player(voice):
-        voice.player.volume_db = 0.0
-        voice.player.pitch_scale = 1.0
+    if _voice_owns_slot(voice):
+        voice.slot.clear_spatial()
+        voice.slot.apply_gain(0.0)
+        voice.slot.apply_pitch(1.0)
     _active_voices.remove_at(index)
 
     if not _active_voices and not _instances:
-        finished.emit()
+        _finished_pending = true
 
 
 func _stop_voice(index: int) -> void:
@@ -1158,20 +1228,10 @@ func _stop_voice(index: int) -> void:
         return
 
     var voice := _active_voices[index]
-    var owns_player := _voice_owns_player(voice)
+    var owns_slot := _voice_owns_slot(voice)
     _release_voice(index)
-    if owns_player:
-        _reset_player(voice.player, true)
-
-
-func _reset_player(player, clear_stream := false) -> void:
-    if not is_instance_valid(player):
-        return
-    player.stop()
-    player.pitch_scale = 1.0
-    player.volume_db = 0.0
-    if clear_stream:
-        player.stream = null
+    if owns_slot:
+        voice.slot.reset(true)
 
 
 func _update_voice(index: int, delta: float) -> bool:
@@ -1183,7 +1243,7 @@ func _update_voice(index: int, delta: float) -> bool:
         _stop_voice(index)
         return false
 
-    if not is_instance_valid(voice.player) or (not voice.finish_on_end and not voice.player.playing):
+    if not voice.slot or (not voice.finish_on_end and not voice.slot.playing):
         _release_voice(index)
         return false
 
@@ -1204,7 +1264,7 @@ func _update_voice(index: int, delta: float) -> bool:
         _stop_voice(index)
         return false
 
-    if not voice.automation and voice.stream_end_position > 0.0 and voice.player.get_playback_position() >= voice.stream_end_position:
+    if not voice.automation and voice.stream_end_position > 0.0 and voice.slot.playback_position >= voice.stream_end_position:
         _stop_voice(index)
         return false
 
@@ -1221,7 +1281,7 @@ func _stop_event_instance(instance: EventInstance, immediate: bool) -> void:
         _stop_instance_voices(instance)
         _remove_instance(instance)
         if not _active_voices and not _instances:
-            finished.emit()
+            _finished_pending = true
         return
 
     if instance.status == PlaybackStatus.RELEASING:
@@ -1264,11 +1324,7 @@ func _collect_finished_instances() -> void:
         _remove_instance(instance)
 
     if not _active_voices and not _instances:
-        finished.emit()
-
-
-func _notify_process_requirement_changed() -> void:
-    process_requirement_changed.emit(requires_process())
+        _finished_pending = true
 
 
 func _voices_for_instance(instance: EventInstance) -> Array[ActiveVoice]:
@@ -1371,19 +1427,19 @@ func _stop_automation_voice(voice: ActiveVoice) -> void:
         return
     if _begin_automation_voice_stop(voice):
         return
-    _stop_voice(_find_active_voice_index(voice.player))
+    _stop_voice(_find_active_voice_index(voice.slot))
 
 
 func _finish_automation_voice_on_end(voice: ActiveVoice) -> void:
-    if not voice or not is_instance_valid(voice.player):
+    if not voice or not voice.slot:
         return
-    var playback_position: float = voice.player.get_playback_position()
+    var playback_position: float = voice.slot.playback_position
     var was_looping := SfxStreamLoopSupport.is_looping(voice.stream)
     if was_looping and voice.stream == voice.clip.stream:
         var stream := voice.stream.duplicate(true) as AudioStream if voice.stream else null
         if stream:
             voice.stream = stream
-            voice.player.stream = stream
+            voice.slot.swap_stream(stream)
     voice.automation_release_gain = voice.automation_current_gain
     voice.finish_on_end = true
     voice.finish_elapsed = 0.0
@@ -1392,14 +1448,14 @@ func _finish_automation_voice_on_end(voice: ActiveVoice) -> void:
     if voice.stream_end_position > 0.0:
         playback_position = _resolve_tail_start_position(playback_position, voice.stream_end_position, was_looping)
         voice.finish_duration = maxf(voice.stream_end_position - playback_position, 0.0)
-        voice.player.play(playback_position)
+        voice.slot.replay(playback_position)
     _apply_voice_state(voice)
 
 
 func _restart_automation_voice(voice: ActiveVoice) -> void:
     if not voice or not voice.event_instance or not voice.clip or not voice.automation:
         return
-    if not is_instance_valid(voice.player):
+    if not voice.slot:
         return
 
     var stream := voice.stream
@@ -1408,10 +1464,10 @@ func _restart_automation_voice(voice: ActiveVoice) -> void:
         if not stream:
             return
         voice.stream = stream
-        voice.player.stream = stream
+        voice.slot.swap_stream(stream)
 
     var start_position := _resolve_voice_start_position(voice.event_instance, voice.clip, voice.automation)
-    if voice.automation:
+    if voice.automation and voice.automation.phase_locked and voice.automation.phase_period > 0.0:
         start_position = _resolve_phase_locked_automation_start_position(voice.event_instance, voice.clip, voice.automation, stream)
     var stream_length := maxf(stream.get_length(), 0.0) if stream else 0.0
     if stream_length > 0.0:
@@ -1430,6 +1486,6 @@ func _restart_automation_voice(voice: ActiveVoice) -> void:
     voice.stop_fade_duration = 0.0
     voice.automation_current_gain = 1.0
     voice.automation_release_gain = 1.0
-    voice.player.play(start_position)
+    voice.slot.replay(start_position)
     _enter_track_attack(voice)
     _apply_voice_state(voice)
