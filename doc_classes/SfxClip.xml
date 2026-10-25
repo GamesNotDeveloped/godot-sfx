@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxClip" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One audio (or synthesized) segment of an [SfxEvent] or [SfxAutomation].
+	</brief_description>
+	<description>
+		[member offset]/[member length] place it on the timeline (seconds) or on the automation's parameter axis (its units); [member stream_offset] is where playback starts inside the stream.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="bookend" type="bool" setter="set_bookend" getter="get_bookend" default="false">
+			The opening or closing piece of a longer sound: never shifted by [member SfxEvent.start_fraction].
+		</member>
+		<member name="cut" type="bool" setter="set_cut" getter="get_cut" default="true">
+			When its automation leaves it: [code]true[/code] stops it (through its track's release), [code]false[/code] plays out the lap it is in.
+		</member>
+		<member name="fade_in_curve" type="Curve" setter="set_fade_in_curve" getter="get_fade_in_curve">
+			Gain over the clip's local time (timeline) or parameter value (automation).
+		</member>
+		<member name="fade_out_curve" type="Curve" setter="set_fade_out_curve" getter="get_fade_out_curve">
+			Gain over the time left to the clip's end (timeline - a looping clip fades out only when stopped) or towards [member offset] + [member length] (automation).
+		</member>
+		<member name="generator_playback" type="Resource" setter="set_generator_playback" getter="get_generator_playback">
+			The [SfxGeneratorPlayback] that fills an [AudioStreamGenerator] [member stream].
+		</member>
+		<member name="length" type="float" setter="set_length" getter="get_length" default="0.0">
+			Its span from [member offset]; 0 is the stream's own length. On a timeline it also cuts the stream short.
+		</member>
+		<member name="offset" type="float" setter="set_offset" getter="get_offset" default="0.0">
+			Its start on the timeline (seconds) or the parameter axis.
+		</member>
+		<member name="phase_offset" type="float" setter="set_phase_offset" getter="get_phase_offset" default="0.0">
+			Shift used by a [member SfxAutomation.phase_locked] automation.
+		</member>
+		<member name="pitch_curve" type="Curve" setter="set_pitch_curve" getter="get_pitch_curve">
+			Pitch over the clip's local time or parameter value.
+		</member>
+		<member name="stream" type="AudioStream" setter="set_stream" getter="get_stream">
+			What it plays. An [AudioStreamGenerator] needs [member generator_playback].
+		</member>
+		<member name="stream_offset" type="float" setter="set_stream_offset" getter="get_stream_offset" default="0.0">
+			Seconds into [member stream] where playback starts.
+		</member>
+		<member name="track" type="SfxTrack" setter="set_track" getter="get_track">
+			Its mixer track; [member SfxEvent.master_track] when unset.
+		</member>
+		<member name="trigger_mode" type="int" setter="set_trigger_mode" getter="get_trigger_mode" enum="SfxClip.TriggerMode" default="0">
+			Whether it starts with the timeline or when the event is released.
+		</member>
+	</members>
+	<constants>
+		<constant name="TRIGGER_TIMELINE" value="0" enum="TriggerMode">
+			Starts when the instance's time reaches [member offset].
+		</constant>
+		<constant name="TRIGGER_SUSTAIN" value="1" enum="TriggerMode">
+			Starts when the instance is stopped without [code]immediate[/code] - a tail.
+		</constant>
+	</constants>
+</class>

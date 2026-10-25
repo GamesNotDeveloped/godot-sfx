@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxTrack" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Mixer channel of clips.
+	</brief_description>
+	<description>
+		Mute, solo and volume of the clips routed to it, and an envelope of its own applied to each of its voices.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="adsr_enabled" type="bool" setter="set_adsr_enabled" getter="get_adsr_enabled" default="false">
+			Whether its envelope gates each of its voices.
+		</member>
+		<member name="attack" type="float" setter="set_attack" getter="get_attack" default="0.0">
+			Seconds from silence to full gain.
+		</member>
+		<member name="decay" type="float" setter="set_decay" getter="get_decay" default="0.0">
+			Seconds from full gain to [member sustain].
+		</member>
+		<member name="mute" type="bool" setter="set_mute" getter="get_mute" default="false">
+			Silences its clips.
+		</member>
+		<member name="release" type="float" setter="set_release" getter="get_release" default="0.0">
+			Seconds of fade-out when a voice stops or its automation leaves it.
+		</member>
+		<member name="solo" type="bool" setter="set_solo" getter="get_solo" default="false">
+			Silences the event's clips of other tracks.
+		</member>
+		<member name="sustain" type="float" setter="set_sustain" getter="get_sustain" default="1.0">
+			The held gain, 0..1.
+		</member>
+		<member name="track_name" type="StringName" setter="set_track_name" getter="get_track_name" default="&amp;&quot;&quot;">
+			Display name.
+		</member>
+		<member name="volume_db" type="float" setter="set_volume_db" getter="get_volume_db" default="0.0">
+			Gain of its clips.
+		</member>
+	</members>
+</class>

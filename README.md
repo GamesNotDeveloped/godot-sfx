@@ -12,9 +12,21 @@ Simple Sound Effects System for Godot inspired by FMOD
 * Fade-in and fade-out curves
 * Routing tracks to audio buses
 * Uses built-in AudioStreams
-* Playback ticked on a worker thread, with the player nodes as proxies (`GndSfxServer`)
-* Native implementation for Godot
+* Player parameters read by every event, derived parameters (expressions, smoothing, rate of change)
+  and triggers that start and stop events from them
+* Native (C++ GDExtension) playback, ticked on worker threads; a sound at rest costs nothing per frame
+* Single and double precision builds, Linux (glibc 2.34), Windows and Android (arm64)
 * Open source
+
+## API and building
+
+See [docs/API.md](docs/API.md); the class reference is in the editor (F1). In short:
+
+```sh
+git submodule update --init --recursive
+make compile-debug          # PRECISION=double for a double precision Godot
+make import test
+```
 
 ## Hints
 

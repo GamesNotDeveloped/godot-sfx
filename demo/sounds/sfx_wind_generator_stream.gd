@@ -51,7 +51,7 @@ const OUTPUT_HEADROOM := 0.22
 @export var seed := 0
 
 
-func create_state(playback: AudioStreamGeneratorPlayback, clip: SfxClip):
+func _create_state(playback: AudioStreamGeneratorPlayback, clip: SfxClip):
     if not playback:
         return null
 
@@ -64,7 +64,7 @@ func create_state(playback: AudioStreamGeneratorPlayback, clip: SfxClip):
     return runtime
 
 
-func update(state, context: Dictionary) -> void:
+func _update(state, context: Dictionary) -> void:
     var runtime := state as RuntimeState
     if not runtime or not runtime.playback:
         return

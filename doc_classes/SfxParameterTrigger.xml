@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxParameterTrigger" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Starts or stops its [SfxEvent] from a parameter of the player.
+	</brief_description>
+	<description>
+		Evaluated on the tick after [member parameter] changes, never per frame. Off while the player is [member SfxPlayer.cut].
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="direction" type="int" setter="set_direction" getter="get_direction" enum="SfxParameterTrigger.Direction" default="0">
+			[constant CROSS]/[constant STEP]: which way fires.
+		</member>
+		<member name="exclusive" type="bool" setter="set_exclusive" getter="get_exclusive" default="false">
+			A fire is dropped while the event still plays.
+		</member>
+		<member name="min_interval" type="float" setter="set_min_interval" getter="get_min_interval" default="0.0">
+			Seconds a fire waits after the last one; one sooner is dropped.
+		</member>
+		<member name="mode" type="int" setter="set_mode" getter="get_mode" enum="SfxParameterTrigger.Mode" default="0">
+			What a change of the value does.
+		</member>
+		<member name="off_threshold" type="float" setter="set_off_threshold" getter="get_off_threshold" default="0.0">
+			[constant GATE]: releases the event below it (hysteresis).
+		</member>
+		<member name="on_threshold" type="float" setter="set_on_threshold" getter="get_on_threshold" default="0.0">
+			[constant GATE]: starts the event at or above it. [constant CROSS]: the threshold crossed.
+		</member>
+		<member name="parameter" type="StringName" setter="set_parameter" getter="get_parameter" default="&amp;&quot;&quot;">
+			The parameter of the player it watches.
+		</member>
+		<member name="resume_offset" type="float" setter="set_resume_offset" getter="get_resume_offset" default="0.0">
+			[constant GATE]: where the event starts when its gate opens again after the player was cut - past its opening.
+		</member>
+		<member name="step" type="float" setter="set_step" getter="get_step" default="1.0">
+			[constant STEP]: the step whose change fires. [constant EVERY]: the travel between fires.
+		</member>
+	</members>
+	<constants>
+		<constant name="GATE" value="0" enum="Mode">
+			Plays while the value is on, with hysteresis between [member on_threshold] and [member off_threshold].
+		</constant>
+		<constant name="CROSS" value="1" enum="Mode">
+			One-shot when the value crosses [member on_threshold].
+		</constant>
+		<constant name="STEP" value="2" enum="Mode">
+			One-shot when [code]floor(value / step)[/code] changes.
+		</constant>
+		<constant name="EVERY" value="3" enum="Mode">
+			One-shot every [member step] units the value travels (a distance counter: a rail joint each rail length).
+		</constant>
+		<constant name="BOTH" value="0" enum="Direction">
+			Up and down.
+		</constant>
+		<constant name="UP" value="1" enum="Direction">
+			Upwards only.
+		</constant>
+		<constant name="DOWN" value="2" enum="Direction">
+			Downwards only.
+		</constant>
+	</constants>
+</class>

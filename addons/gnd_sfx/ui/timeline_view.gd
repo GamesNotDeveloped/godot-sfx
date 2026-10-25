@@ -47,6 +47,9 @@ func _rebuild_from_event() -> void:
         for clip in event.clips:
             if clip is SfxClip:
                 _clips.append(clip as SfxClip)
+        if not event.master_track:
+            event.master_track = SfxTrack.new()
+            event.master_track.track_name = &"Master"
         var tracks := event.tracks.duplicate()
         tracks.append(event.master_track)
         _lane_groups = _build_lane_groups(tracks, _clips, event.master_track)

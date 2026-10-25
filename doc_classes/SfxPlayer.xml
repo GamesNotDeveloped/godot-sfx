@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxPlayer" inherits="Node" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Plays the events of an [SfxBank] without position (UI, music, the listener's own sounds).
+	</brief_description>
+	<description>
+		Plays the events of an [SfxBank]. It is a thin node: the engine behind it ([SfxPlaybackRuntime]) runs on a worker thread of [GndSfxServer], and the player owns the pool of audio nodes it applies the results to.
+		Two kinds of parameters drive events: the player's own ([method set_parameter], declared by the bank, read by every event) and an instance's ([method play]/[method modulate], for that instance only).
+		[codeblock]
+		player.set_parameter(&amp;"speed", velocity.length())
+		player.play(&amp;"horn")
+		player.stop(&amp;"horn")
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_event_visualization_state">
+			<return type="Dictionary" />
+			<param index="0" name="event_name" type="StringName" />
+			<description>
+				A snapshot of the latest instance of [param event_name] for the editor's timelines: [code]playing[/code], [code]event_time[/code], [code]parameters[/code], and per clip [code]active[/code], [code]position[/code], [code]visible_span[/code], [code]loops[/code].
+			</description>
+		</method>
+		<method name="get_parameter">
+			<return type="float" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				The value of a parameter of the player, raw or derived ([member SfxBank.derived_parameters]).
+			</description>
+		</method>
+		<method name="is_playing">
+			<return type="bool" />
+			<param index="0" name="event_name" type="StringName" />
+			<description>
+				[code]true[/code] while [param event_name] has an instance, also a releasing one.
+			</description>
+		</method>
+		<method name="modulate">
+			<return type="void" />
+			<param index="0" name="event_name" type="StringName" />
+			<param index="1" name="parameters" type="Dictionary" />
+			<description>
+				Sets instance parameters of the latest instance of [param event_name]. Prefer [method set_parameter] for a value every event of the bank reads.
+			</description>
+		</method>
+		<method name="play">
+			<return type="void" />
+			<param index="0" name="event_name" type="StringName" />
+			<param index="1" name="offset_or_parameters" type="Variant" default="null" />
+			<param index="2" name="parameters" type="Dictionary" default="{}" />
+			<description>
+				Starts the event [param event_name]. [param offset_or_parameters] is either a time offset in seconds into the event's timeline or a [Dictionary] of instance parameters (then [param parameters] is ignored). Instance parameters override the player's own ([method set_parameter]) for this instance only.
+			</description>
+		</method>
+		<method name="play_automation">
+			<return type="void" />
+			<param index="0" name="event_name" type="StringName" />
+			<param index="1" name="automation_name" type="StringName" />
+			<param index="2" name="value" type="float" default="0.0" />
+			<param index="3" name="restart" type="bool" default="false" />
+			<description>
+				Starts [param event_name] with [param automation_name] set to [param value], or only sets it when the event already plays (unless [param restart]).
+			</description>
+		</method>
+		<method name="seek">
+			<return type="void" />
+			<param index="0" name="event_name" type="StringName" />
+			<param index="1" name="offset" type="float" />
+			<description>
+				Restarts the latest instance of [param event_name] at [param offset] seconds of its timeline.
+			</description>
+		</method>
+		<method name="set_parameter">
+			<return type="void" />
+			<param index="0" name="name" type="StringName" />
+			<param index="1" name="value" type="float" />
+			<description>
+				Sets a parameter of the player, declared by [member SfxBank.parameters]; every event of the bank reads it. Cheap enough to call every frame: the value is stored and the tick that follows (on a worker thread) works out what changes. An undeclared name is refused with a warning. The same as setting the [code]parameters/&lt;name&gt;[/code] property.
+			</description>
+		</method>
+		<method name="set_parameter_values">
+			<return type="void" />
+			<param index="0" name="values" type="PackedFloat64Array" />
+			<description>
+				Sets the raw parameters in their declaration order ([member SfxBank.parameters]), from the first: one call for all of them - what a game feeding many values every step (from C++, through [method Object.call]) should use. Only the values that changed are worked out again.
+			</description>
+		</method>
+		<method name="set_parameters">
+			<return type="void" />
+			<param index="0" name="parameters" type="Dictionary" />
+			<description>
+				Batch [method modulate]: a [Dictionary] of event name -&gt; parameter [Dictionary].
+			</description>
+		</method>
+		<method name="stop">
+			<return type="void" />
+			<param index="0" name="event_name_or_immediate" type="Variant" default="null" />
+			<param index="1" name="immediate" type="bool" default="false" />
+			<description>
+				[code]stop()[/code] / [code]stop(true)[/code] stops every event; [code]stop("name")[/code] / [code]stop("name", true)[/code] the latest playing instance of one. Without [param immediate] the instance releases: its event ADSR, its tracks' release and fade-out curves, then its sustain clips.
+			</description>
+		</method>
+		<method name="stop_automation">
+			<return type="void" />
+			<param index="0" name="event_name" type="StringName" />
+			<param index="1" name="automation_name" type="StringName" />
+			<param index="2" name="immediate" type="bool" default="false" />
+			<description>
+				Stops [param event_name] (there is no per-automation stop).
+			</description>
+		</method>
+		<method name="sync_values">
+			<return type="void" />
+			<param index="0" name="rebuild" type="bool" default="false" />
+			<description>
+				Applies the exported values to the voice nodes; with [param rebuild] frees the nodes and stops everything first.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="bank" type="SfxBank" setter="set_bank" getter="get_bank">
+			The [SfxBank] whose events this player plays. Assigning it also declares the player's parameters ([member SfxBank.parameters]), shown as [code]parameters/&lt;name&gt;[/code] properties.
+		</member>
+		<member name="bus" type="StringName" setter="set_bus" getter="get_bus" default="&amp;&quot;Master&quot;">
+			The audio bus of every voice node.
+		</member>
+		<member name="cut" type="bool" setter="set_cut" getter="get_cut" default="false">
+			Silences the player from outside (e.g. a cab bank when the listener leaves the cab): everything stops at once, [method play] is ignored and its [SfxParameterTrigger]s start nothing. Set back to [code]false[/code], its open [constant SfxParameterTrigger.GATE]s start their events again at [member SfxParameterTrigger.resume_offset]. Combined with the distance cut of [SfxPlayer3D]. Not saved with the scene.
+		</member>
+		<member name="max_polyphony" type="int" setter="set_max_polyphony" getter="get_max_polyphony" default="1">
+			[member AudioStreamPlayer.max_polyphony] of every voice node.
+		</member>
+		<member name="max_tracks" type="int" setter="set_max_tracks" getter="get_max_tracks" default="4">
+			How many voices (audio nodes) the player may use at once. A new voice beyond it steals one: a releasing voice first, then a one-shot, then the oldest.
+		</member>
+		<member name="playback_automation" type="StringName" setter="set_playback_automation" getter="get_playback_automation" default="&amp;&quot;&quot;">
+			Editor only: the parameter the preview sets to [member playback_automation_value].
+		</member>
+		<member name="playback_automation_value" type="float" setter="set_playback_automation_value" getter="get_playback_automation_value" default="0.0">
+			Editor only: the value of [member playback_automation] in the preview.
+		</member>
+		<member name="playback_effect" type="StringName" setter="set_playback_effect" getter="get_playback_effect" default="&amp;&quot;&quot;">
+			Editor only: the event the preview plays.
+		</member>
+		<member name="playback_enabled" type="bool" setter="set_playback_enabled" getter="get_playback_enabled" default="false">
+			Editor only: previews [member playback_effect] in the editor.
+		</member>
+	</members>
+	<signals>
+		<signal name="finished">
+			<description>
+				Emitted when the last voice and instance of the player are gone.
+			</description>
+		</signal>
+	</signals>
+</class>

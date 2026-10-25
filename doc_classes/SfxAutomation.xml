@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxAutomation" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Clips of an [SfxEvent] that follow a parameter instead of the clock.
+	</brief_description>
+	<description>
+		Clips placed on [member parameter_name]'s axis: a clip plays while the value is within [member SfxClip.offset] .. [member SfxClip.offset] + [member SfxClip.length], overlapping ones crossfade by their fade curves. The value is the instance's, else the player's, else [member min_domain].
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="clips" type="SfxClip[]" setter="set_clips" getter="get_clips" default="[]">
+			Its clips. Assign a new array to change it.
+		</member>
+		<member name="crossfade_mode" type="int" setter="set_crossfade_mode" getter="get_crossfade_mode" enum="SfxAutomation.CrossfadeMode" default="0">
+			How overlapping clips are normalized.
+		</member>
+		<member name="latch_on_start" type="bool" setter="set_latch_on_start" getter="get_latch_on_start" default="false">
+			Chooses the clip by the value when the instance starts and never again - a one-shot's chunk (wheel clatter by speed, a click by step). The instance then ends with that clip.
+		</member>
+		<member name="max_domain" type="float" setter="set_max_domain" getter="get_max_domain" default="1.0">
+			End of the axis.
+		</member>
+		<member name="min_domain" type="float" setter="set_min_domain" getter="get_min_domain" default="0.0">
+			Start of the axis (and the value without one).
+		</member>
+		<member name="parameter_name" type="StringName" setter="set_parameter_name" getter="get_parameter_name" default="&amp;&quot;&quot;">
+			The parameter it follows.
+		</member>
+		<member name="phase_locked" type="bool" setter="set_phase_locked" getter="get_phase_locked" default="false">
+			Keeps looping clips in step: a clip starting mid-way starts at the shared phase of the event's clock.
+		</member>
+		<member name="phase_period" type="float" setter="set_phase_period" getter="get_phase_period" default="0.0">
+			The shared loop period of [member phase_locked].
+		</member>
+		<member name="pitch_curve" type="Curve" setter="set_pitch_curve" getter="get_pitch_curve">
+			Pitch over the whole axis, on top of each clip's.
+		</member>
+	</members>
+	<constants>
+		<constant name="LINEAR" value="0" enum="CrossfadeMode">
+			Gains sum to 1.
+		</constant>
+		<constant name="EQUAL_POWER" value="1" enum="CrossfadeMode">
+			Squared gains sum to 1.
+		</constant>
+	</constants>
+</class>

@@ -17,3 +17,10 @@ mono_crash.*.json
 
 /.codex
 /android/
+
+# GDExtension builds (Makefile)
+/build-*/
+/addons/gnd_sfx/bin/
+/gut.log
+/compile_commands.json
+/extension_api.double.json

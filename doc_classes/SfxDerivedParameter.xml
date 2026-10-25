@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxDerivedParameter" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A parameter computed from others: an expression, then a filter over time.
+	</brief_description>
+	<description>
+		[member expression] is a Godot [Expression] of [member inputs] (raw or earlier derived parameters), plus [code]previous[/code] (its own last value) and [code]delta[/code] (seconds since). The result is filtered by [member filter] and is a parameter like any other. It is computed on the worker thread, each player with its own parsed expression.
+		[codeblock]
+		ao + af * (power + 60 * rpm)                                   # several parameters
+		sqrt(fr * lerp(0.4, 1, v / (1 + vmax)))                         # functions
+		previous + clamp(goal - previous, -0.2 * delta, 0.4 * delta)   # slew rate: 0.4/s up, 0.2/s down
+		previous - previous * 2.5 * delta if v &lt; 2.5 else squeal       # decay only below 2.5
+		[/codeblock]
+		Integration is the game's: feed a computed counter (distance, momentum) as a raw parameter.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="expression" type="String" setter="set_expression" getter="get_expression" default="&quot;&quot;">
+			The [Expression].
+		</member>
+		<member name="filter" type="int" setter="set_filter" getter="get_filter" enum="SfxDerivedParameter.Filter" default="0">
+			What follows the expression.
+		</member>
+		<member name="inputs" type="PackedStringArray" setter="set_inputs" getter="get_inputs" default="PackedStringArray()">
+			Names of the parameters the expression reads, in the order of its arguments.
+		</member>
+		<member name="name" type="StringName" setter="set_name" getter="get_name" default="&amp;&quot;&quot;">
+			Its name.
+		</member>
+		<member name="time_constant" type="float" setter="set_time_constant" getter="get_time_constant" default="0.1">
+			Seconds of [constant SMOOTH]: about 63% of a step after one time constant.
+		</member>
+	</members>
+	<constants>
+		<constant name="NONE" value="0" enum="Filter">
+			The expression's value.
+		</constant>
+		<constant name="SMOOTH" value="1" enum="Filter">
+			A low-pass with [member time_constant].
+		</constant>
+		<constant name="DERIVATIVE" value="2" enum="Filter">
+			Change of the expression's value per second.
+		</constant>
+	</constants>
+</class>

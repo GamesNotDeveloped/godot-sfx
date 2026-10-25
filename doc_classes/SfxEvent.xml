@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxEvent" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		One playable sound of an [SfxBank] - FMOD's event.
+	</brief_description>
+	<description>
+		A timeline of [member clips], any number of parameter-driven [member automations], [member parameter_modulations] of gain/pitch/unit size, and [member triggers] that start and stop it from parameters. [method SfxPlayer.play] starts one instance of it.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="adsr_enabled" type="bool" setter="set_adsr_enabled" getter="get_adsr_enabled" default="false">
+			Whether the event's own envelope ([member attack], [member decay], [member sustain], [member release]) gates all its voices.
+		</member>
+		<member name="attack" type="float" setter="set_attack" getter="get_attack" default="0.0">
+			Seconds from silence to full gain.
+		</member>
+		<member name="automations" type="SfxAutomation[]" setter="set_automations" getter="get_automations" default="[]">
+			Clip groups that follow a parameter instead of the clock (e.g. engine samples over rpm).
+		</member>
+		<member name="clips" type="SfxClip[]" setter="set_clips" getter="get_clips" default="[]">
+			Clips on the event's timeline: a [constant SfxClip.TRIGGER_TIMELINE] clip starts when the instance's time reaches its [member SfxClip.offset], a [constant SfxClip.TRIGGER_SUSTAIN] one when the instance is stopped without [code]immediate[/code].
+		</member>
+		<member name="decay" type="float" setter="set_decay" getter="get_decay" default="0.0">
+			Seconds from full gain to [member sustain].
+		</member>
+		<member name="master_track" type="SfxTrack" setter="set_master_track" getter="get_master_track">
+			The mixer track of a clip without one. Made by the editor for a new event; without one such a clip plays at unity.
+		</member>
+		<member name="name" type="StringName" setter="set_name" getter="get_name" default="&amp;&quot;&quot;">
+			The name the event is played by.
+		</member>
+		<member name="parameter_modulations" type="SfxParameterModulation[]" setter="set_parameter_modulations" getter="get_parameter_modulations" default="[]">
+			Mappings of parameters to gain, pitch or unit size of every voice; results multiply.
+		</member>
+		<member name="pitch_variation" type="float" setter="set_pitch_variation" getter="get_pitch_variation" default="1.0">
+			Factor on the pitch of every voice of the event.
+		</member>
+		<member name="polyphony_enabled" type="bool" setter="set_polyphony_enabled" getter="get_polyphony_enabled" default="true">
+			Whether a [method SfxPlayer.play] while the event plays starts a second instance ([code]true[/code]) or replaces the playing one.
+		</member>
+		<member name="release" type="float" setter="set_release" getter="get_release" default="0.0">
+			Seconds of fade-out after a non-immediate stop.
+		</member>
+		<member name="spatial_config" type="SfxSpatialConfig" setter="set_spatial_config" getter="get_spatial_config">
+			Overrides of the 3D voices' place and attenuation.
+		</member>
+		<member name="start_fraction" type="float" setter="set_start_fraction" getter="get_start_fraction" default="0.0">
+			How far into its stream every clip but a bookend starts, as a fraction of the stream: emitters playing one recording in step comb-filter into a ring.
+		</member>
+		<member name="sustain" type="float" setter="set_sustain" getter="get_sustain" default="1.0">
+			The held gain, 0..1.
+		</member>
+		<member name="tracks" type="SfxTrack[]" setter="set_tracks" getter="get_tracks" default="[]">
+			Mixer tracks of the clips (mute/solo/volume/ADSR).
+		</member>
+		<member name="triggers" type="SfxParameterTrigger[]" setter="set_triggers" getter="get_triggers" default="[]">
+			What starts and stops the event from parameters of the player.
+		</member>
+	</members>
+</class>

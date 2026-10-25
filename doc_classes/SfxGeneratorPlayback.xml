@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxGeneratorPlayback" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Base of a synthesized clip.
+	</brief_description>
+	<description>
+		Assign a subclass to [member SfxClip.generator_playback] of a clip whose stream is an [AudioStreamGenerator]. One resource may serve many voices at once: keep per-voice state in what [method _create_state] returns. [method _update] runs on a worker thread.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_cleanup" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="state" type="Variant" />
+			<description>
+				Called once when the voice stops.
+			</description>
+		</method>
+		<method name="_create_state" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="playback" type="AudioStreamGeneratorPlayback" />
+			<param index="1" name="clip" type="SfxClip" />
+			<description>
+				Called once when a voice starts; returns its state, handed back to [method _update] and [method _cleanup].
+			</description>
+		</method>
+		<method name="_update" qualifiers="virtual">
+			<return type="void" />
+			<param index="0" name="state" type="Variant" />
+			<param index="1" name="context" type="Dictionary" />
+			<description>
+				Called every tick while the voice plays: push frames into [code]context.stream_playback[/code]. [param context] also holds [code]delta[/code], [code]playback_position[/code], [code]event_name[/code], [code]clip[/code], [code]event_time[/code], [code]parameters[/code], [code]automation_name[/code] and [code]automation_value[/code].
+			</description>
+		</method>
+	</methods>
+</class>

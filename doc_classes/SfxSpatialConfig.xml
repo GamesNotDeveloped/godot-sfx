@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxSpatialConfig" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Per-event overrides of the 3D voices.
+	</brief_description>
+	<description>
+		Applied to the [AudioStreamPlayer3D] voices of an [SfxPlayer3D] while the event plays.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="attenuation_model" type="int" setter="set_attenuation_model" getter="get_attenuation_model" default="0">
+			Attenuation model of the voices.
+		</member>
+		<member name="max_distance" type="float" setter="set_max_distance" getter="get_max_distance" default="-1.0">
+			Max distance; below 0 keeps the player's.
+		</member>
+		<member name="panning_strength" type="float" setter="set_panning_strength" getter="get_panning_strength" default="1.0">
+			Panning strength of the voices.
+		</member>
+		<member name="position" type="Vector3" setter="set_position" getter="get_position" default="Vector3(0, 0, 0)">
+			Place of the voices relative to the player.
+		</member>
+		<member name="unit_size" type="float" setter="set_unit_size" getter="get_unit_size" default="10.0">
+			Unit size of the voices.
+		</member>
+	</members>
+</class>

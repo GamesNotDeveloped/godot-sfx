@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxParameter" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A parameter of the player, declared by [member SfxBank.parameters].
+	</brief_description>
+	<description>
+		The game sets it ([method SfxPlayer.set_parameter] or the [code]parameters/&lt;name&gt;[/code] property) and every event of the bank reads it.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="default_value" type="float" setter="set_default_value" getter="get_default_value" default="0.0">
+			The value before the game sets one.
+		</member>
+		<member name="max_value" type="float" setter="set_max_value" getter="get_max_value" default="1.0">
+			Highest value of the inspector's slider.
+		</member>
+		<member name="min_value" type="float" setter="set_min_value" getter="get_min_value" default="0.0">
+			Lowest value of the inspector's slider.
+		</member>
+		<member name="name" type="StringName" setter="set_name" getter="get_name" default="&amp;&quot;&quot;">
+			Its name.
+		</member>
+	</members>
+</class>
