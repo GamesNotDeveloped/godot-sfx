@@ -4,15 +4,15 @@ class_name DemoToneGeneratorPlayback
 const BASE_GAIN := 0.18
 
 
-func create_state(playback: AudioStreamGeneratorPlayback, track):
+func _create_state(playback: AudioStreamGeneratorPlayback, clip: SfxClip):
     return {
         "playback": playback,
         "phase": 0.0,
-        "mix_rate": _resolve_mix_rate(track),
+        "mix_rate": _resolve_mix_rate(clip),
     }
 
 
-func update(state, context: Dictionary) -> void:
+func _update(state, context: Dictionary) -> void:
     if not state:
         return
 
@@ -36,7 +36,7 @@ func update(state, context: Dictionary) -> void:
     state["phase"] = phase
 
 
-func cleanup(_state) -> void:
+func _cleanup(_state) -> void:
     pass
 
 

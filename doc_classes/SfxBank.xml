@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxBank" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		A named set of [SfxEvent]s and the parameters they read.
+	</brief_description>
+	<description>
+		What [member SfxPlayer.bank] plays - roughly FMOD's bank. Declares the parameters of a player using it: raw ones the game sets ([member parameters]) and ones computed from those ([member derived_parameters]).
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_event" qualifiers="const">
+			<return type="SfxEvent" />
+			<param index="0" name="event_name" type="StringName" />
+			<description>
+				The event named [param event_name], or [code]null[/code].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="derived_parameters" type="SfxDerivedParameter[]" setter="set_derived_parameters" getter="get_derived_parameters" default="[]">
+			Parameters computed from others every tick, in this order (one may read those before it).
+		</member>
+		<member name="events" type="SfxEvent[]" setter="set_events" getter="get_events" default="[]">
+			The events, found by their [member SfxEvent.name]. Assign a new array to change it - an array changed in place is not seen.
+		</member>
+		<member name="parameters" type="SfxParameter[]" setter="set_parameters" getter="get_parameters" default="[]">
+			The parameters a player of this bank has: [method SfxPlayer.set_parameter] sets them, every event reads them.
+		</member>
+	</members>
+</class>

@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxPlaybackRuntime" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		The playback engine of one player.
+	</brief_description>
+	<description>
+		What [SfxPlayer] and [SfxPlayer3D] drive. It touches no node - it writes slots that the player copies into its audio nodes. Exposed for tests and tools: create one, [method set_slot_capacity], [method play], [method update] by hand and read [method get_debug_voices]/[method get_debug_slots].
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Stops everything at once.
+			</description>
+		</method>
+		<method name="get_clock" qualifiers="const">
+			<return type="float" />
+			<description>
+				Seconds the runtime has been updated by.
+			</description>
+		</method>
+		<method name="get_debug_slots" qualifiers="const">
+			<return type="Array" />
+			<description>
+				The slots: stream, start_position, transport, play_serial, volume_db, pitch_scale, playing, position, looping, spatial_override, dirty.
+			</description>
+		</method>
+		<method name="get_debug_voices" qualifiers="const">
+			<return type="Array" />
+			<description>
+				The voices: slot, instance_id, event_name, clip, stream, automation_name, stream_start_position, stream_end_position, track_adsr_stage, stopping, finish_on_end, creation_order.
+			</description>
+		</method>
+		<method name="get_event_visualization_state" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="event_name" type="StringName" />
+			<description>
+				See [method SfxPlayer.get_event_visualization_state].
+			</description>
+		</method>
+		<method name="get_instance_ids" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="event_name" type="StringName" />
+			<description>
+				Ids of the instances of [param event_name], oldest first.
+			</description>
+		</method>
+		<method name="get_next_wake" qualifiers="const">
+			<return type="float" />
+			<description>
+				Runtime time of the next [method update] with work: [method get_clock] for the next frame, [code]INF[/code] for none.
+			</description>
+		</method>
+		<method name="get_parameter" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="name" type="StringName" />
+			<description>
+				A parameter's value.
+			</description>
+		</method>
+		<method name="handle_slot_finished">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<description>
+				The node of slot [param slot] reached its stream's end.
+			</description>
+		</method>
+		<method name="is_playing" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="event_name" type="StringName" />
+			<description>
+				See [method SfxPlayer.is_playing].
+			</description>
+		</method>
+		<method name="modulate">
+			<return type="void" />
+			<param index="0" name="event_name" type="StringName" />
+			<param index="1" name="parameters" type="Dictionary" />
+			<description>
+				See [method SfxPlayer.modulate].
+			</description>
+		</method>
+		<method name="play">
+			<return type="void" />
+			<param index="0" name="event" type="SfxEvent" />
+			<param index="1" name="offset" type="float" default="0.0" />
+			<param index="2" name="parameters" type="Dictionary" default="{}" />
+			<description>
+				Starts an instance of [param event].
+			</description>
+		</method>
+		<method name="play_automation">
+			<return type="void" />
+			<param index="0" name="event" type="SfxEvent" />
+			<param index="1" name="automation_name" type="StringName" />
+			<param index="2" name="value" type="float" default="0.0" />
+			<param index="3" name="restart" type="bool" default="false" />
+			<description>
+				See [method SfxPlayer.play_automation].
+			</description>
+		</method>
+		<method name="requires_process" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Whether anything plays or waits.
+			</description>
+		</method>
+		<method name="sample_automation_curve" qualifiers="static">
+			<return type="float" />
+			<param index="0" name="curve" type="Curve" />
+			<param index="1" name="value" type="float" />
+			<param index="2" name="offset" type="float" />
+			<description>
+				A curve at a parameter value, relative to [param offset].
+			</description>
+		</method>
+		<method name="sample_automation_fade_out" qualifiers="static">
+			<return type="float" />
+			<param index="0" name="curve" type="Curve" />
+			<param index="1" name="clip" type="SfxClip" />
+			<param index="2" name="value" type="float" />
+			<description>
+				An automation clip's fade-out at a parameter value.
+			</description>
+		</method>
+		<method name="sample_time_curve" qualifiers="static">
+			<return type="float" />
+			<param index="0" name="curve" type="Curve" />
+			<param index="1" name="elapsed" type="float" />
+			<param index="2" name="from_end" type="bool" />
+			<description>
+				Gain of a time curve [param elapsed] seconds into it (or before its end with [param from_end]).
+			</description>
+		</method>
+		<method name="seek">
+			<return type="void" />
+			<param index="0" name="event_name" type="StringName" />
+			<param index="1" name="offset" type="float" />
+			<description>
+				See [method SfxPlayer.seek].
+			</description>
+		</method>
+		<method name="set_bank">
+			<return type="void" />
+			<param index="0" name="bank" type="SfxBank" />
+			<description>
+				Declares the parameters, derived parameters and triggers of [param bank].
+			</description>
+		</method>
+		<method name="set_parameter">
+			<return type="bool" />
+			<param index="0" name="name" type="StringName" />
+			<param index="1" name="value" type="float" />
+			<description>
+				Sets a raw parameter; [code]false[/code] when the bank declares none of that name.
+			</description>
+		</method>
+		<method name="set_parameter_values">
+			<return type="void" />
+			<param index="0" name="values" type="PackedFloat64Array" />
+			<description>
+				See [method SfxPlayer.set_parameter_values].
+			</description>
+		</method>
+		<method name="set_parameters">
+			<return type="void" />
+			<param index="0" name="parameters" type="Dictionary" />
+			<description>
+				See [method SfxPlayer.set_parameters].
+			</description>
+		</method>
+		<method name="set_slot_capacity">
+			<return type="void" />
+			<param index="0" name="capacity" type="int" />
+			<description>
+				How many voices it may use.
+			</description>
+		</method>
+		<method name="stop">
+			<return type="void" />
+			<param index="0" name="event_name_or_immediate" type="Variant" default="null" />
+			<param index="1" name="immediate" type="bool" default="false" />
+			<description>
+				See [method SfxPlayer.stop].
+			</description>
+		</method>
+		<method name="stop_all">
+			<return type="void" />
+			<param index="0" name="immediate" type="bool" default="false" />
+			<description>
+				Stops every instance.
+			</description>
+		</method>
+		<method name="stop_automation">
+			<return type="void" />
+			<param index="0" name="event" type="SfxEvent" />
+			<param index="1" name="automation_name" type="StringName" />
+			<param index="2" name="immediate" type="bool" default="false" />
+			<description>
+				See [method SfxPlayer.stop_automation].
+			</description>
+		</method>
+		<method name="stop_event">
+			<return type="void" />
+			<param index="0" name="event_name" type="StringName" />
+			<param index="1" name="immediate" type="bool" default="false" />
+			<description>
+				Stops the latest playing instance of [param event_name].
+			</description>
+		</method>
+		<method name="tail_start_position" qualifiers="static">
+			<return type="float" />
+			<param index="0" name="position" type="float" />
+			<param index="1" name="end" type="float" />
+			<param index="2" name="was_looping" type="bool" />
+			<description>
+				Where a drained loop restarts its tail.
+			</description>
+		</method>
+		<method name="update">
+			<return type="void" />
+			<param index="0" name="delta" type="float" />
+			<description>
+				Advances the runtime by [param delta] seconds.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="ADSR_IDLE" value="0" enum="AdsrStage">
+			Not entered.
+		</constant>
+		<constant name="ADSR_ATTACK" value="1" enum="AdsrStage">
+			Rising.
+		</constant>
+		<constant name="ADSR_DECAY" value="2" enum="AdsrStage">
+			Falling to sustain.
+		</constant>
+		<constant name="ADSR_SUSTAIN" value="3" enum="AdsrStage">
+			Held.
+		</constant>
+		<constant name="ADSR_RELEASE" value="4" enum="AdsrStage">
+			Fading out.
+		</constant>
+		<constant name="ADSR_STOPPED" value="5" enum="AdsrStage">
+			Done.
+		</constant>
+	</constants>
+</class>

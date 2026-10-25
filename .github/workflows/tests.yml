@@ -1,5 +1,8 @@
 name: Tests
 
+# The GUT tests against the library built on the runner, and the release libraries of each platform
+# and precision - the Linux ones in ci/docker/linux-sdk (libreloaded's image) for an old glibc, the
+# Windows ones with MinGW. The double precision API is dumped from libreloaded's godot-double.
 on:
   push:
     branches: [main]
@@ -9,9 +12,12 @@ on:
 permissions:
   contents: read
 
+env:
+  GODOT_VERSION: 4.7.2
+
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,11 +27,56 @@ jobs:
       - name: Setup Godot
         uses: chickensoft-games/setup-godot@v2
         with:
-          version: 4.6.1
+          version: ${{ env.GODOT_VERSION }}
           use-dotnet: false
+
+      - name: Build the library
+        run: make compile-debug
 
       - name: Import project
         run: godot --headless --import --path demo
 
       - name: Run tests
-        run: godot --headless -d --path demo -s res://addons/gut/gut_cmdln.gd
+        run: make test
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux, windows]
+        precision: [single, double]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # the double precision API comes from a double precision Godot: libreloaded's release of it
+      - name: Fetch the double precision Godot
+        if: matrix.precision == 'double'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          gh release download godot-$GODOT_VERSION-double -R MaSzyna-Reloaded/libreloaded \
+            -p godot.linuxbsd.editor.double.x86_64 -O "$HOME/.local/bin/godot-double"
+          chmod +x "$HOME/.local/bin/godot-double"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install MinGW
+        if: matrix.platform == 'windows'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+
+      - name: Build the ${{ matrix.platform }} ${{ matrix.precision }} library
+        run: make ${{ matrix.platform == 'linux' && 'compile-release-linux' || 'compile-windows-release' }} PRECISION=${{ matrix.precision }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libgndsfx-${{ matrix.platform }}-${{ matrix.precision }}
+          path: addons/gnd_sfx/bin/${{ matrix.platform }}
+          if-no-files-found: error

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="GndSfxServer" inherits="Node" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Ticks every player of the game on worker threads.
+	</brief_description>
+	<description>
+		Made by the first player that needs it, as a child of the root - there is no autoload. The players do not process themselves: at the very end of each frame's [code]_process[/code] the server posts one tick over [code]gnd_sfx/worker_threads[/code] threads of [WorkerThreadPool] ([code]0[/code] ticks on the main thread), so it runs while the engine renders and steps the next physics frame. At the start of the next [code]_process[/code] it waits for it and copies the results into the audio nodes - only what changed. A player's API waits for a tick still running first.
+		Only players with work are visited: a held loop or a sound between its fades costs nothing per frame.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="wait_for_tick">
+			<return type="void" />
+			<description>
+				Returns once no tick is running.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="process_mode" type="int" setter="set_process_mode" getter="get_process_mode" overrides="Node" enum="Node.ProcessMode" default="3" />
+		<member name="process_priority" type="int" setter="set_process_priority" getter="get_process_priority" overrides="Node" default="-128" />
+	</members>
+</class>

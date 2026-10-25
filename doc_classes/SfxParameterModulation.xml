@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxParameterModulation" inherits="Resource" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Maps a parameter to gain, pitch or unit size of an event's voices.
+	</brief_description>
+	<description>
+		The value (instance, else player, else [member default_value]) is clamped to [member min_domain]..[member max_domain] and sampled from [member curve]; the results of all modulations of one target multiply. For a formula of several parameters, derive one ([SfxDerivedParameter]) and modulate by it.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="curve" type="Curve" setter="set_curve" getter="get_curve">
+			Result over the value; without it the value itself.
+		</member>
+		<member name="default_value" type="float" setter="set_default_value" getter="get_default_value" default="0.0">
+			The value without one.
+		</member>
+		<member name="max_domain" type="float" setter="set_max_domain" getter="get_max_domain" default="1.0">
+			Highest value sampled.
+		</member>
+		<member name="min_domain" type="float" setter="set_min_domain" getter="get_min_domain" default="0.0">
+			Lowest value sampled.
+		</member>
+		<member name="parameter_name" type="StringName" setter="set_parameter_name" getter="get_parameter_name" default="&amp;&quot;&quot;">
+			The parameter it reads.
+		</member>
+		<member name="target" type="int" setter="set_target" getter="get_target" enum="SfxParameterModulation.Target" default="0">
+			What it scales.
+		</member>
+	</members>
+	<constants>
+		<constant name="GAIN" value="0" enum="Target">
+			Linear gain factor.
+		</constant>
+		<constant name="PITCH" value="1" enum="Target">
+			Pitch factor.
+		</constant>
+		<constant name="UNIT_SIZE" value="2" enum="Target">
+			Factor on [member SfxSpatialConfig.unit_size].
+		</constant>
+	</constants>
+</class>

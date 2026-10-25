@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SfxStreamLoopSupport" inherits="Object" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Loop handling of [AudioStreamWAV], [AudioStreamOggVorbis] and [AudioStreamMP3].
+	</brief_description>
+	<description>
+		Static helpers over the stream types that loop.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_loop_region" qualifiers="static">
+			<return type="Vector2" />
+			<param index="0" name="stream" type="AudioStream" />
+			<description>
+				Where the stream wraps, in seconds: [code]x[/code] the loop's start, [code]y[/code] its end.
+			</description>
+		</method>
+		<method name="is_looping" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="stream" type="AudioStream" />
+			<description>
+				Whether [param stream] loops.
+			</description>
+		</method>
+		<method name="set_looping" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="stream" type="AudioStream" />
+			<param index="1" name="enabled" type="bool" />
+			<description>
+				Turns the loop of [param stream] on or off.
+			</description>
+		</method>
+		<method name="set_persisted_loop_offset" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="stream" type="AudioStream" />
+			<param index="1" name="offset" type="float" />
+			<description>
+				Sets the stored loop offset; [code]false[/code] when the type has none.
+			</description>
+		</method>
+		<method name="supports_persisted_loop_offset" qualifiers="static">
+			<return type="bool" />
+			<param index="0" name="stream" type="AudioStream" />
+			<description>
+				Whether the stream type stores a loop offset.
+			</description>
+		</method>
+	</methods>
+</class>
