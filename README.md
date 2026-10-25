@@ -15,7 +15,7 @@ Simple Sound Effects System for Godot inspired by FMOD
 * Player parameters read by every event, derived parameters (expressions, smoothing, rate of change)
   and triggers that start and stop events from them
 * Native (C++ GDExtension) playback, ticked on worker threads; a sound at rest costs nothing per frame
-* Single and double precision builds, Linux (glibc 2.34) and Windows
+* Single and double precision builds, Linux (glibc 2.34), Windows and Android (arm64)
 * Open source
 
 ## API and building

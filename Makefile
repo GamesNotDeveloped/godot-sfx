@@ -1,5 +1,6 @@
 SHELL:=/bin/bash
 .PHONY: compile-debug compile-release compile-release-linux compile-windows-debug compile-windows-release \
+	compile-android-debug compile-android-release \
 	check-glibc linux-sdk-image import test docs
 .DEFAULT_GOAL = compile-debug
 
@@ -35,6 +36,21 @@ compile-windows-debug: $(API_FILE)
 
 compile-windows-release: $(API_FILE)
 	$(call build,build-win64-release,Release,template_release,$(MINGW_ARGS))
+
+# arm64 with the NDK's own toolchain file: any NDK will do for a GDExtension, GitHub's runners carry
+# one in ANDROID_NDK_LATEST_HOME. API level 24 is the lowest Godot's Android export supports
+ANDROID_NDK_ROOT?=$(ANDROID_NDK_LATEST_HOME)
+ANDROID_API?=24
+ANDROID_ARGS=-DCMAKE_TOOLCHAIN_FILE=$(ANDROID_NDK_ROOT)/build/cmake/android.toolchain.cmake \
+	-DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=$(ANDROID_API)
+
+compile-android-debug: $(API_FILE)
+	@test -d "$(ANDROID_NDK_ROOT)" || { echo "No NDK: make $@ ANDROID_NDK_ROOT=<path>" >&2; exit 1; }
+	$(call build,build-android-debug,$(BUILD_TYPE),template_debug,$(ANDROID_ARGS))
+
+compile-android-release: $(API_FILE)
+	@test -d "$(ANDROID_NDK_ROOT)" || { echo "No NDK: make $@ ANDROID_NDK_ROOT=<path>" >&2; exit 1; }
+	$(call build,build-android-release,Release,template_release,$(ANDROID_ARGS))
 
 # glibc is only forward compatible: a library linked against a rolling distribution's glibc refuses
 # to load on anything older. The Linux release is built in ci/docker/linux-sdk - libreloaded's own

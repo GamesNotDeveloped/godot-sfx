@@ -181,6 +181,7 @@ make compile-debug                          # the editor's library, single preci
 make compile-debug PRECISION=double         # for a double precision Godot (godot-double)
 make compile-release-linux [PRECISION=...]  # in ci/docker/linux-sdk: glibc 2.34, checked
 make compile-windows-release [PRECISION=...]  # MinGW
+make compile-android-release [PRECISION=...]  # arm64, ANDROID_NDK_ROOT=<ndk> (API 24, ANDROID_API=...)
 make import test                            # the GUT tests (GODOT=godot-double for double)
 make docs                                   # refresh doc_classes/ after an API change
 ```

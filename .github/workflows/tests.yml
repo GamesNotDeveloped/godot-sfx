@@ -2,7 +2,7 @@ name: Tests
 
 # The GUT tests against the library built on the runner, and the release libraries of each platform
 # and precision - the Linux ones in ci/docker/linux-sdk (libreloaded's image) for an old glibc, the
-# Windows ones with MinGW. The double precision API is dumped from libreloaded's godot-double.
+# Windows ones with MinGW, the Android ones (arm64) with the runner's NDK. The double precision API is dumped from libreloaded's godot-double.
 on:
   push:
     branches: [main]
@@ -43,8 +43,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [linux, windows]
+        platform: [linux, windows, android]
         precision: [single, double]
+        include:
+          - platform: linux
+            make: compile-release-linux
+          - platform: windows
+            make: compile-windows-release
+          - platform: android
+            make: compile-android-release
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -73,7 +80,7 @@ jobs:
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
 
       - name: Build the ${{ matrix.platform }} ${{ matrix.precision }} library
-        run: make ${{ matrix.platform == 'linux' && 'compile-release-linux' || 'compile-windows-release' }} PRECISION=${{ matrix.precision }}
+        run: make ${{ matrix.make }} PRECISION=${{ matrix.precision }}
 
       - uses: actions/upload-artifact@v4
         with:
