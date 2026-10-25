@@ -1,6 +1,6 @@
 SHELL:=/bin/bash
 .PHONY: compile-debug compile-release compile-release-linux compile-windows-debug compile-windows-release \
-	compile-android-debug compile-android-release \
+	compile-android-debug compile-android-release compile-debug-linux \
 	check-glibc linux-sdk-image import test docs
 .DEFAULT_GOAL = compile-debug
 
@@ -64,19 +64,25 @@ linux-sdk-image:
 	docker image inspect $(LINUX_SDK_IMAGE) > /dev/null 2>&1 || docker pull -q $(LINUX_SDK_IMAGE) \
 		|| docker build -q -t $(LINUX_SDK_IMAGE) ci/docker/linux-sdk
 
-compile-release-linux: linux-sdk-image $(API_FILE)
-	mkdir -p $(CCACHE_DIR) && docker run --rm --user $(shell id -u):$(shell id -g) -v $(CURDIR):$(CURDIR) -w $(CURDIR) \
-		-v $(CCACHE_DIR):/ccache -e CCACHE_DIR=/ccache -e CMAKE_CXX_COMPILER_LAUNCHER=ccache $(LINUX_SDK_IMAGE) \
-		sh -c '$(call build,build-release-linux,Release,template_release)'
-	$(MAKE) check-glibc
+LINUX_SDK_RUN=mkdir -p $(CCACHE_DIR) && docker run --rm --user $(shell id -u):$(shell id -g) -v $(CURDIR):$(CURDIR) -w $(CURDIR) \
+	-v $(CCACHE_DIR):/ccache -e CCACHE_DIR=/ccache -e CMAKE_CXX_COMPILER_LAUNCHER=ccache $(LINUX_SDK_IMAGE)
 
-# Fails when a Linux library needs a newer glibc than GLIBC_MAX
+compile-release-linux: linux-sdk-image $(API_FILE)
+	$(LINUX_SDK_RUN) sh -c '$(call build,build-release-linux,Release,template_release)'
+	$(MAKE) check-glibc GLIBC_TARGET=template_release PRECISION=$(PRECISION)
+
+# The editor's library for a release (the one the editor and a game run from it load)
+compile-debug-linux: linux-sdk-image $(API_FILE)
+	$(LINUX_SDK_RUN) sh -c '$(call build,build-debug-linux,$(BUILD_TYPE),template_debug)'
+	$(MAKE) check-glibc GLIBC_TARGET=template_debug PRECISION=$(PRECISION)
+
+# Fails when the Linux library of GLIBC_TARGET and PRECISION needs a newer glibc than GLIBC_MAX
+GLIBC_TARGET?=template_release
 check-glibc:
-	@for lib in addons/gnd_sfx/bin/linux/libgndsfx*template_release*.so; do \
-		need=$$(objdump -T $$lib | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -Vu | tail -1); \
-		echo "$$lib: GLIBC_$$need"; \
-		[ "$$(printf '%s\n%s\n' $$need $(GLIBC_MAX) | sort -V | tail -1)" = "$(GLIBC_MAX)" ] || { echo "needs glibc > $(GLIBC_MAX)" >&2; exit 1; }; \
-	done
+	@lib=addons/gnd_sfx/bin/linux/libgndsfx.linux.$(GLIBC_TARGET).$(if $(filter double,$(PRECISION)),double.)x86_64.so; \
+	need=$$(objdump -T $$lib | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -Vu | tail -1); \
+	echo "$$lib: GLIBC_$$need"; \
+	[ "$$(printf '%s\n%s\n' $$need $(GLIBC_MAX) | sort -V | tail -1)" = "$(GLIBC_MAX)" ] || { echo "needs glibc > $(GLIBC_MAX)" >&2; exit 1; }
 
 $(DOUBLE_API_FILE):
 	mkdir -p build-api && cd build-api && $(GODOT) --headless --dump-extension-api

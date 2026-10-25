@@ -18,6 +18,12 @@ Simple Sound Effects System for Godot inspired by FMOD
 * Single and double precision builds, Linux (glibc 2.34), Windows and Android (arm64)
 * Open source
 
+## Installing
+
+Download `gnd_sfx-<version>.zip` from [Releases](https://github.com/GamesNotDeveloped/godot-sfx/releases) and unpack it into
+your project: it is `addons/gnd_sfx` with the libraries of every platform and precision
+(Linux, Windows, Android; single and double). A pushed tag builds the release (`.github/workflows/tests.yml`).
+
 ## API and building
 
 See [docs/API.md](docs/API.md); the class reference is in the editor (F1). In short:
