@@ -381,7 +381,8 @@ void SfxPlayerCore::validate_property(PropertyInfo &p_property) const {
     PackedStringArray options;
     options.push_back(NONE_OPTION);
     if (p_property.name == StringName("playback_effect")) {
-        for (const Ref<SfxEvent> &event : bank.is_valid() ? bank->events.items : LocalVector<Ref<SfxEvent>>()) {
+        for (uint32_t i = 0; bank.is_valid() && i < bank->events.items.size(); i++) {
+            const Ref<SfxEvent> &event = bank->events.items[i];
             if (event.is_valid() && !event->name.is_empty()) {
                 options.push_back(event->name);
             }
