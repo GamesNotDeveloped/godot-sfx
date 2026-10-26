@@ -185,6 +185,8 @@ class SfxEvent : public Resource {
     SFX_VALUE(double, pitch_variation, 1.0)
 
 public:
+    // Every event mixes through its "Master" track, as the GDScript class made it (#4)
+    SfxEvent();
     // Makes what a worker must not make (SfxClip::prepare) for every clip of the event
     void prepare();
 

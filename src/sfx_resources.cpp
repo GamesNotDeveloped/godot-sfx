@@ -125,6 +125,11 @@ void SfxParameterTrigger::_bind_methods() {
     SFX_BIND_PLAIN(SfxParameterTrigger, exclusive, Variant::BOOL);
 }
 
+SfxEvent::SfxEvent() {
+    master_track.instantiate();
+    master_track->track_name = "Master";
+}
+
 void SfxEvent::prepare() {
     for (const Ref<SfxClip> &clip : clips.items) {
         if (clip.is_valid()) {
