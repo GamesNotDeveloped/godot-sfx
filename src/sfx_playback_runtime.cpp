@@ -383,11 +383,12 @@ void SfxPlaybackRuntime::fire_triggers() {
                     trigger.open = true;
                     up = !is_playing(trigger.event->name);
                     offset = trigger.resume ? resource.resume_offset : 0.0;
-                    trigger.resume = false;
                 } else if (trigger.open && value < resource.off_threshold) {
                     trigger.open = false;
                     stop_event(trigger.event->name, false);
                 }
+                // a gate resumes only on the value it finds, not when it opens later
+                trigger.resume = false;
                 break;
             case SfxParameterTrigger::CROSS:
                 up = trigger.has_previous && trigger.previous < resource.on_threshold && value >= resource.on_threshold;
@@ -418,9 +419,12 @@ void SfxPlaybackRuntime::fire_triggers() {
 
 void SfxPlaybackRuntime::set_triggers_enabled(bool p_enabled) {
     if (p_enabled && !triggers_enabled) {
-        // what moved while off is not a step: the edges start from the values found now
+        // what moved while off is not a step: the edges start from the values found now, and a gate
+        // found open - open before or opened meanwhile - starts past its opening (resume_offset), as
+        // a sound activated out of range drops its opening bookend (MaSzyna's sound.cpp:364-371)
         for (Trigger &trigger : triggers) {
             trigger.has_previous = trigger.has_previous && trigger.resource->mode == SfxParameterTrigger::GATE;
+            trigger.resume = trigger.resource->mode == SfxParameterTrigger::GATE;
             mark_parameter(trigger.index);
         }
     }

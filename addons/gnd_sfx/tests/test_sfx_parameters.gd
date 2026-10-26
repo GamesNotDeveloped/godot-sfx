@@ -270,6 +270,41 @@ func test_cut_player_ignores_play_and_restarts_its_gates() -> void:
     assert_true(player.is_playing(&"cab"), "Back, its open gate starts the event")
 
 
+func test_gate_opened_while_cut_resumes_past_the_opening() -> void:
+    _declare([&"on"])
+    var trigger := _triggered(&"horn", &"on", SfxParameterTrigger.GATE, true)
+    trigger.on_threshold = 0.5
+    trigger.resume_offset = 0.3
+    var player := SfxPlayer.new()
+    player.bank = bank
+    add_child_autoqfree(player)
+    player.cut = true
+    player.set_parameter(&"on", 1.0)
+    await _wait_frames(3)
+    player.cut = false
+    await _wait_frames(3)
+    assert_almost_eq(float(player.get_event_visualization_state(&"horn")["event_time"]), 0.3, 0.1,
+            "Switched on unheard, it is heard past its opening")
+
+
+func test_gate_closed_through_a_cut_plays_its_opening_when_opened_later() -> void:
+    _declare([&"on"])
+    var trigger := _triggered(&"horn", &"on", SfxParameterTrigger.GATE, true)
+    trigger.on_threshold = 0.5
+    trigger.resume_offset = 0.3
+    var player := SfxPlayer.new()
+    player.bank = bank
+    add_child_autoqfree(player)
+    player.cut = true
+    await _wait_frames(3)
+    player.cut = false
+    await _wait_frames(3)
+    player.set_parameter(&"on", 1.0)
+    await _wait_frames(3)
+    assert_almost_eq(float(player.get_event_visualization_state(&"horn")["event_time"]), 0.0, 0.1,
+            "Switched on while heard, it plays its opening")
+
+
 func test_cut_stops_the_voices_it_was_playing() -> void:
     _declare([&"on"])
     _triggered(&"cab", &"on", SfxParameterTrigger.GATE, true).on_threshold = 0.5
