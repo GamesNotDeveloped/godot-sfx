@@ -319,6 +319,24 @@ func test_cut_stops_the_voices_it_was_playing() -> void:
     assert_eq(_voice_nodes_playing(player), 0, "Cut, no voice node plays on")
 
 
+func test_player_far_from_the_camera_is_heard_as_soon_as_the_camera_jumps_to_it() -> void:
+    _declare([&"on"])
+    _triggered(&"cab", &"on", SfxParameterTrigger.GATE, true).on_threshold = 0.5
+    var camera := Camera3D.new()
+    add_child_autoqfree(camera)
+    camera.make_current()
+    var player := SfxPlayer3D.new()
+    player.bank = bank
+    player.position = Vector3(5000.0, 0.0, 0.0)
+    add_child_autoqfree(player)
+    player.set_parameter(&"on", 1.0)
+    await _wait_frames(3)
+    assert_false(player.is_playing(&"cab"), "Beyond the hard cut distance it starts nothing")
+    camera.global_position = player.global_position
+    await _wait_frames(3)
+    assert_true(player.is_playing(&"cab"), "The camera at it, it is heard without waiting for the interval")
+
+
 func _voice_nodes_playing(player: Node) -> int:
     return player.get_children(true).filter(func(node: Node) -> bool:
         return node is AudioStreamPlayer and node.playing).size()

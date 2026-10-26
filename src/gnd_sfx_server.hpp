@@ -19,6 +19,8 @@
 
 namespace godot {
 
+class Camera3D;
+
 class GndSfxServer : public Node {
     GDCLASS(GndSfxServer, Node);
 
@@ -28,10 +30,13 @@ class GndSfxServer : public Node {
     LocalVector<SfxPlayerCore *> due; // what the posted tick works on
     int64_t group = -1;
     int threads = 2;
-    double hard_cut_distance = 1000.0, hard_cut_interval = 5.0, hard_cut_elapsed = 0.0;
+    double hard_cut_distance = 1000.0, hard_cut_interval = 5.0, hard_cut_elapsed = 0.0, hard_cut_jump = 100.0;
+    // the camera of the last distance check and where it stood
+    ObjectID hard_cut_camera;
+    Vector3 hard_cut_position;
 
     void tick_core(uint32_t p_index);
-    void check_hard_cut();
+    void check_hard_cut(Camera3D *p_camera);
 
 protected:
     static void _bind_methods();
@@ -40,6 +45,7 @@ protected:
 public:
     static constexpr const char *HARD_CUT_DISTANCE_SETTING = "gnd_sfx/hard_cut_distance";
     static constexpr const char *HARD_CUT_CHECK_INTERVAL_SETTING = "gnd_sfx/hard_cut_check_interval";
+    static constexpr const char *HARD_CUT_CHECK_DISTANCE_SETTING = "gnd_sfx/hard_cut_check_distance";
     static constexpr const char *WORKER_THREADS_SETTING = "gnd_sfx/worker_threads";
     static void register_settings();
 

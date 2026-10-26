@@ -11,7 +11,7 @@
 		player.play(&amp;"horn")
 		player.stop(&amp;"horn")
 		[/codeblock]
-		Beyond [code]gnd_sfx/hard_cut_distance[/code] of the camera it falls silent the way [member cut] does (checked every [code]gnd_sfx/hard_cut_check_interval[/code] seconds and at every [method play]).
+		Beyond [code]gnd_sfx/hard_cut_distance[/code] of the camera it falls silent the way [member cut] does (checked every [code]gnd_sfx/hard_cut_check_interval[/code] seconds, at once when the camera is switched or has moved farther than [code]gnd_sfx/hard_cut_check_distance[/code] since the last check, and at every [method play]).
 	</description>
 	<tutorials>
 	</tutorials>

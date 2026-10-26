@@ -119,8 +119,10 @@ by speed, click by step) that ends with its chunk. Fire it with a `STEP` / `CROS
 `cut = true` silences a player at once: its sounds stop, `play()` is ignored, its triggers start
 nothing. With `cut = false` it comes back: open gates start their events again at
 `resume_offset`, and step/cross/every edges restart from the values found then. `SfxPlayer3D` is
-also cut beyond `gnd_sfx/hard_cut_distance` of the camera (unless `hard_cut_enabled` is off). The
-effective cut is either of the two.
+also cut beyond `gnd_sfx/hard_cut_distance` of the camera (unless `hard_cut_enabled` is off),
+looked at every `gnd_sfx/hard_cut_check_interval` and at once when the camera is switched or has
+moved farther than `gnd_sfx/hard_cut_check_distance` since the last look. The effective cut is
+either of the two.
 
 ## Threading
 
@@ -151,6 +153,7 @@ frame N+1 GndSfxServer._process (first): wait, copy what changed into the audio 
 | `gnd_sfx/worker_threads` | 2 | threads of the tick; 0 = main thread |
 | `gnd_sfx/hard_cut_distance` | 1000 | `SfxPlayer3D` falls silent beyond this distance of the camera |
 | `gnd_sfx/hard_cut_check_interval` | 5 | seconds between distance checks (of the playing players) |
+| `gnd_sfx/hard_cut_check_distance` | 100 | a camera switched or moved this far since the last check is checked at once |
 
 ## Synthesized clips
 

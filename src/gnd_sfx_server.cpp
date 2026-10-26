@@ -36,6 +36,7 @@ void GndSfxServer::register_settings() {
     };
     define(HARD_CUT_DISTANCE_SETTING, 1000.0, "0,10000,10,or_greater");
     define(HARD_CUT_CHECK_INTERVAL_SETTING, 5.0, "0.5,60,0.5,or_greater");
+    define(HARD_CUT_CHECK_DISTANCE_SETTING, 100.0, "1,1000,1,or_greater");
     define(WORKER_THREADS_SETTING, 2, "0,16,1");
 }
 
@@ -53,6 +54,7 @@ GndSfxServer::GndSfxServer() {
     threads = setting(WORKER_THREADS_SETTING, 2);
     hard_cut_distance = setting(HARD_CUT_DISTANCE_SETTING, 1000.0);
     hard_cut_interval = setting(HARD_CUT_CHECK_INTERVAL_SETTING, 5.0);
+    hard_cut_jump = setting(HARD_CUT_CHECK_DISTANCE_SETTING, 100.0);
     set_process_mode(PROCESS_MODE_ALWAYS);
     set_process_priority(-128);
     GndSfxServerPoster *poster = memnew(GndSfxServerPoster);
@@ -124,10 +126,14 @@ void GndSfxServer::_process(double p_delta) {
             i++;
         }
     }
+    // a camera switched or moved far since the last check is checked at once: what a jump to
+    // another place brings into earshot is not heard seconds late
     hard_cut_elapsed += p_delta;
-    if (hard_cut_elapsed >= hard_cut_interval) {
+    Camera3D *camera = get_viewport()->get_camera_3d();
+    if (hard_cut_elapsed >= hard_cut_interval || (camera && (ObjectID(camera->get_instance_id()) != hard_cut_camera ||
+            camera->get_global_position().distance_to(hard_cut_position) > hard_cut_jump))) {
         hard_cut_elapsed = 0.0;
-        check_hard_cut();
+        check_hard_cut(camera);
     }
 }
 
@@ -163,11 +169,12 @@ void GndSfxServer::tick_core(uint32_t p_index) {
 
 // A player beyond the distance falls silent and stops its triggers until it comes back. Only the
 // live players are looked at - an idle one has nothing to cut, and its play() checks for itself
-void GndSfxServer::check_hard_cut() {
-    Camera3D *camera = get_viewport()->get_camera_3d();
+void GndSfxServer::check_hard_cut(Camera3D *p_camera) {
+    hard_cut_camera = p_camera ? ObjectID(p_camera->get_instance_id()) : ObjectID();
+    hard_cut_position = p_camera ? p_camera->get_global_position() : Vector3();
     for (SfxPlayerCore *core : cores) {
         if (SfxPlayer3D *player = Object::cast_to<SfxPlayer3D>(core->owner)) {
-            player->hard_cut_check(camera);
+            player->hard_cut_check(p_camera);
         }
     }
 }
