@@ -270,6 +270,25 @@ func test_cut_player_ignores_play_and_restarts_its_gates() -> void:
     assert_true(player.is_playing(&"cab"), "Back, its open gate starts the event")
 
 
+func test_cut_stops_the_voices_it_was_playing() -> void:
+    _declare([&"on"])
+    _triggered(&"cab", &"on", SfxParameterTrigger.GATE, true).on_threshold = 0.5
+    var player := SfxPlayer.new()
+    player.bank = bank
+    add_child_autoqfree(player)
+    player.set_parameter(&"on", 1.0)
+    await _wait_frames(3)
+    assert_true(_voice_nodes_playing(player) > 0, "Open, its gate plays the event")
+    player.cut = true
+    await _wait_frames(3)
+    assert_eq(_voice_nodes_playing(player), 0, "Cut, no voice node plays on")
+
+
+func _voice_nodes_playing(player: Node) -> int:
+    return player.get_children(true).filter(func(node: Node) -> bool:
+        return node is AudioStreamPlayer and node.playing).size()
+
+
 func _wait_frames(count: int) -> void:
     for _index in range(count):
         await get_tree().process_frame

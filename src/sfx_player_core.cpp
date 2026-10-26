@@ -254,6 +254,8 @@ void SfxPlayerCore::set_cut(bool p_forced, bool p_distance) {
     runtime->set_triggers_enabled(!cut);
     if (cut) {
         runtime->clear();
+        // a cut player is not ticked, so its nodes stop here, not at a flush that never comes
+        flush(runtime->get_clock());
     }
     request_tick();
 }
